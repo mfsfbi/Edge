@@ -1,4 +1,4 @@
-const CACHE='intex-v4';
+const CACHE='intex-v5';
 const STATIC_ASSETS=['/static/css/app.css','/static/js/app.js','/static/uploads/logo.svg'];
 
 self.addEventListener('install', event=>{

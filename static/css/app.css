@@ -182,10 +182,18 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 .public-chrome .menu-btn svg{width:21px;height:21px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
-/* Public drawer: navigation is independent from the shortcuts at the bottom. */
-.mobile-drawer{top:114px!important;max-width:430px;margin-left:auto;margin-right:auto;left:4vw;right:4vw}
-.mobile-drawer a{border:1px solid rgba(255,255,255,.08);margin:2px 0}
-.mobile-drawer a:nth-of-type(6){margin-top:9px;border-color:rgba(255,255,255,.22)}
+/* Public menu: compact maroon drawer below the header, never a full-page overlay. */
+.public-chrome .menu-btn{background:#fff!important;color:var(--spu-maroon)!important;border-color:#fff!important;box-shadow:0 6px 18px rgba(42,8,22,.18)}
+.public-chrome .menu-btn:hover{background:#fff!important;color:var(--spu-maroon-dark)!important}
+.mobile-drawer{display:none;position:fixed!important;z-index:60!important;top:114px!important;left:auto!important;right:max(4vw,24px)!important;width:min(360px,calc(100vw - 48px));max-width:none!important;margin:0!important;padding:12px!important;background:var(--spu-maroon)!important;color:#fff!important;border:1px solid rgba(255,255,255,.16)!important;border-radius:0 0 18px 18px!important;box-shadow:0 22px 48px rgba(42,8,22,.24)!important}
+.mobile-drawer.show{display:grid!important}
+.mobile-drawer .drawer-heading{padding:10px 12px 12px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:6px}
+.mobile-drawer .drawer-heading span{display:block;font-weight:950;letter-spacing:.08em}
+.mobile-drawer .drawer-heading small{display:block;margin-top:2px;color:#edcdd8;font-size:9px;text-transform:uppercase;letter-spacing:.12em}
+.mobile-drawer a{display:flex;align-items:center;gap:10px;border:0!important;margin:1px 0!important;padding:13px 12px!important;color:#fff!important;border-radius:10px;font-weight:850}
+.mobile-drawer a:hover,.mobile-drawer a:focus-visible{background:rgba(255,255,255,.11);outline:none}
+.mobile-drawer a svg{width:17px;height:17px;color:#f3d8e1;flex:0 0 auto}
+.mobile-drawer a:nth-of-type(6){margin-top:7px!important;border-top:1px solid rgba(255,255,255,.18)!important;border-radius:0 0 10px 10px}
 
 /* Prestige opening: let the brand breathe before imagery enters the story. */
 .hero-signature{padding-top:112px;padding-bottom:100px;background:linear-gradient(180deg,#f7f4f4 0%,#f6f8f9 78%,var(--paper) 100%)}
@@ -210,9 +218,9 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 .footer-shortcuts a{font-weight:800;color:#d8b6c2!important}
 .footer-shortcuts a:hover{color:#fff!important}
 
-/* No white-on-white public utility text. */
-.public-chrome + .mobile-drawer{color:#fff}
-.public-chrome + .mobile-drawer svg{color:#f6dce5}
+/* Public drawer text/icons remain white on maroon. */
+.public-chrome + .mobile-drawer{color:#fff!important}
+.public-chrome + .mobile-drawer svg{color:#f6dce5!important}
 
 @media(max-width:680px){
   .public-chrome .menu-btn{width:42px;height:42px}
@@ -224,35 +232,8 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
   .hero-pest-rodent{transform:translateY(20px)}
   .footer-shortcuts{justify-content:flex-start}
 }
+@media(max-width:680px){
+  .mobile-drawer{top:114px!important;right:16px!important;width:min(340px,calc(100vw - 32px));border-radius:0 0 18px 18px!important}
+}
+
 .field-help{display:block;color:#7f8d98;font-size:10px;line-height:1.5;margin-top:-4px}
-
-
-/* Final menu visibility fix: white trigger + full maroon visitor drawer */
-.public-chrome .menu-btn{
-  background:#fff!important;
-  color:var(--spu-maroon)!important;
-  border:1px solid rgba(116,27,61,.18)!important;
-  box-shadow:0 8px 22px rgba(0,0,0,.16);
-}
-.public-chrome .menu-btn:hover{background:#f7f0f3!important;color:var(--spu-maroon-dark)!important}
-.mobile-drawer{
-  top:114px!important;
-  left:0!important;
-  right:0!important;
-  bottom:0!important;
-  width:100%!important;
-  max-width:none!important;
-  margin:0!important;
-  padding:26px max(5vw,22px) 40px!important;
-  overflow:auto;
-  border:0!important;
-  border-radius:0!important;
-  background:var(--spu-maroon)!important;
-  box-shadow:0 24px 55px rgba(42,8,22,.22);
-}
-.mobile-drawer.show{display:grid!important;align-content:start;gap:4px}
-.mobile-drawer a{color:#fff!important}
-.mobile-drawer svg{color:#f7dfe8!important}
-.mobile-drawer .drawer-quote{background:#fff!important;color:var(--spu-maroon)!important}
-.mobile-drawer .drawer-quote svg{color:var(--spu-maroon)!important}
-body.menu-open{overflow:hidden}
