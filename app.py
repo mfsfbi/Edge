@@ -1,208 +1,310 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-import sqlite3, os, datetime
+from __future__ import annotations
 
-BASE = os.path.dirname(__file__)
-DB = os.path.join(BASE, 'instance', 'tthms.db')
+import json
+import os
+import sqlite3
+import uuid
+from datetime import datetime, date
+from pathlib import Path
+
+import qrcode
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, url_for
+from werkzeug.utils import secure_filename
+
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "intex.db"
+UPLOAD_DIR = BASE_DIR / "static" / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'tthms-prototype-local'
+app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "intex-demo-secret")
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "svg"}
 
-MODULES = [
-    ('Dashboard','dashboard','fa-house'), ('Reception','reception','fa-desktop'),
-    ('Appointments','appointments','fa-calendar-check'), ('Patients','patients','fa-user-injured'),
-    ('Consultations','consultations','fa-stethoscope'), ('Laboratory','laboratory','fa-flask'),
-    ('Pharmacy','pharmacy','fa-pills'), ('Admissions','admissions','fa-bed'),
-    ('Billing','billing','fa-file-invoice-dollar'), ('Inventory','inventory','fa-boxes-stacked'),
-    ('Reports','reports','fa-chart-line'), ('AI Assistant','ai_assistant','fa-wand-magic-sparkles'),
-    ('Backups','backups','fa-database'), ('Administration','administration','fa-gear')
-]
 
 def db():
-    con = sqlite3.connect(DB)
+    con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     return con
 
+
 def init_db():
-    os.makedirs(os.path.dirname(DB), exist_ok=True)
     con = db()
-    con.executescript('''
-    CREATE TABLE IF NOT EXISTS patients (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_no TEXT UNIQUE,
-        name TEXT NOT NULL,
-        sex TEXT,
-        age INTEGER,
-        phone TEXT,
-        blood_group TEXT,
-        allergies TEXT,
-        status TEXT DEFAULT 'Active',
-        created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER,
-        event_type TEXT NOT NULL,
-        title TEXT NOT NULL,
-        detail TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY(patient_id) REFERENCES patients(id)
-    );
-    CREATE TABLE IF NOT EXISTS appointments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER,
-        appointment_date TEXT,
-        doctor TEXT,
-        reason TEXT,
-        status TEXT DEFAULT 'Scheduled'
-    );
-    CREATE TABLE IF NOT EXISTS bills (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER,
-        description TEXT,
-        amount REAL,
-        status TEXT DEFAULT 'Pending',
-        created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS inventory (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item TEXT,
-        category TEXT,
-        quantity INTEGER,
-        reorder_level INTEGER,
-        unit_cost REAL
-    );
-    ''')
-    if con.execute('SELECT COUNT(*) FROM patients').fetchone()[0] == 0:
-        now = datetime.datetime.now().isoformat(timespec='seconds')
-        seed = [
-            ('TTH-0001','Amina Hassan','F',31,'0712345678','O+','Penicillin','Active'),
-            ('TTH-0002','Brian Otieno','M',44,'0723456789','A+','None known','Active'),
-            ('TTH-0003','Faith Wanjiku','F',19,'0734567890','B+','None known','Active'),
-        ]
-        con.executemany('INSERT INTO patients(patient_no,name,sex,age,phone,blood_group,allergies,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
-                        [(*row, now) for row in seed])
-        pids = [r[0] for r in con.execute('SELECT id FROM patients ORDER BY id').fetchall()]
-        for pid, title, detail in [
-            (pids[0], 'Registration', 'Patient registered at reception.'),
-            (pids[0], 'Consultation', 'Routine outpatient consultation.'),
-            (pids[0], 'Prescription', 'Prescription issued for clinician review.'),
-            (pids[1], 'Registration', 'Patient registered at reception.'),
-            (pids[1], 'Lab request', 'CBC and chemistry requested.'),
-        ]:
-            con.execute('INSERT INTO events(patient_id,event_type,title,detail,created_at) VALUES(?,?,?,?,?)',
-                        (pid, title, title, detail, now))
-        con.executemany('INSERT INTO inventory(item,category,quantity,reorder_level,unit_cost) VALUES(?,?,?,?,?)', [
-            ('Paracetamol 500mg','Pharmacy',420,100,2.50), ('Amoxicillin 500mg','Pharmacy',85,100,8.00),
-            ('IV Normal Saline 500ml','Consumables',62,30,145.00), ('Gloves Medium','Consumables',900,300,8.50)
-        ])
+    con.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS visitors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            phone TEXT,
+            purpose TEXT,
+            location TEXT,
+            qr_token TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            note TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Active',
+            phone TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            owner TEXT,
+            status TEXT NOT NULL DEFAULT 'Open',
+            due_date TEXT,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+    defaults = {
+        "company_name": "INTEX Pest Limited",
+        "tagline": "Serious pest protection. Clearly delivered.",
+        "phone": "0702717779",
+        "whatsapp": "254702717779",
+        "email": "hello@intex.co.ke",
+        "domain": "https://www.intex.co.ke",
+        "address": "Nairobi, Kenya",
+        "logo": "logo.svg",
+        "primary_color": "#0b6b57",
+    }
+    for key, value in defaults.items():
+        con.execute("INSERT OR IGNORE INTO settings(key,value) VALUES (?,?)", (key, value))
+    if con.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
+        con.executemany(
+            "INSERT INTO employees(name,role,status,phone,created_at) VALUES (?,?,?,?,?)",
+            [
+                ("Field Team Lead", "Operations", "Active", "0700000000", datetime.utcnow().isoformat()),
+                ("Client Service Desk", "Customer Care", "Active", "0711111111", datetime.utcnow().isoformat()),
+                ("Technical Officer", "Pest Management", "Active", "0722222222", datetime.utcnow().isoformat()),
+            ],
+        )
+    con.commit()
+    con.close()
+
+
+def settings():
+    con = db()
+    rows = con.execute("SELECT key,value FROM settings").fetchall()
+    con.close()
+    return {r["key"]: r["value"] for r in rows}
+
+
+def set_setting(key, value):
+    con = db()
+    con.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+    con.commit()
+    con.close()
+
+
+def money(v):
+    return f"KES {v:,.0f}"
+
+
+@app.context_processor
+def inject_globals():
+    s = settings()
+    return {"site": s, "now": datetime.now()}
+
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+@app.route("/services")
+def services():
+    return render_template("services.html")
+
+
+@app.route("/contact")
+def contact():
+    return render_template("contact.html")
+
+
+@app.route("/visit", methods=["GET", "POST"])
+def visit():
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or request.form
+        name = (payload.get("name") or "Guest").strip()
+        phone = (payload.get("phone") or "").strip()
+        purpose = (payload.get("purpose") or "General enquiry").strip()
+        location = (payload.get("location") or "Not shared").strip()
+        token = uuid.uuid4().hex[:10]
+        con = db()
+        con.execute(
+            "INSERT INTO visitors(name,phone,purpose,location,qr_token,created_at) VALUES(?,?,?,?,?,?)",
+            (name, phone, purpose, location, token, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        con.commit()
+        con.close()
+        if request.is_json:
+            return jsonify({"ok": True, "token": token})
+        return render_template("visit.html", success=True, token=token)
+    return render_template("visit.html", success=False, token=None)
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    q = ((request.get_json(silent=True) or {}).get("message") or "").lower().strip()
+    s = settings()
+    if any(x in q for x in ["price", "cost", "quote", "how much"]):
+        a = f"We can prepare a tailored estimate. Call {s['phone']} or WhatsApp us for a quick assessment."
+    elif any(x in q for x in ["bed bug", "bedbugs"]):
+        a = "Bed bug treatment is one of our specialist services. Tell us your area and we can arrange an assessment."
+    elif any(x in q for x in ["mosquito", "cockroach", "termite", "rodent", "rat", "snake", "fly"]):
+        a = "Yes — our field team handles a wide range of residential and commercial pest problems."
+    elif any(x in q for x in ["location", "where", "nairobi"]):
+        a = f"We serve clients across Nairobi and beyond. Current office location: {s['address']}."
+    elif any(x in q for x in ["hours", "open", "working"]):
+        a = "Our customer desk can route enquiries during business hours; urgent cases can start through WhatsApp."
+    else:
+        a = f"I can help with services, quotes, pest problems and contact details. You can also call {s['phone']}."
+    return jsonify({"reply": a})
+
+
+@app.route("/admin")
+def admin():
+    con = db()
+    visitors = con.execute("SELECT * FROM visitors ORDER BY id DESC LIMIT 8").fetchall()
+    transactions = con.execute("SELECT * FROM transactions ORDER BY id DESC LIMIT 8").fetchall()
+    employees = con.execute("SELECT * FROM employees ORDER BY id DESC").fetchall()
+    totals = con.execute(
+        "SELECT COALESCE(SUM(CASE WHEN kind='income' THEN amount ELSE 0 END),0) income, "
+        "COALESCE(SUM(CASE WHEN kind='expense' THEN amount ELSE 0 END),0) expense FROM transactions"
+    ).fetchone()
+    visitor_count = con.execute("SELECT COUNT(*) c FROM visitors").fetchone()["c"]
+    con.close()
+    profit = totals["income"] - totals["expense"]
+    qr_url = url_for("visit", _external=True)
+    qr_path = UPLOAD_DIR / "visitor-qr.png"
+    img = qrcode.make(qr_url)
+    img.save(qr_path)
+    return render_template("admin.html", visitors=visitors, transactions=transactions, employees=employees,
+                           income=totals["income"], expense=totals["expense"], profit=profit,
+                           visitor_count=visitor_count, qr_url=qr_url)
+
+
+@app.route("/admin/transaction", methods=["POST"])
+def add_transaction():
+    con = db()
+    amount = float(request.form.get("amount") or 0)
+    con.execute("INSERT INTO transactions(kind,category,amount,note,created_at) VALUES(?,?,?,?,?)", (
+        request.form.get("kind", "income"), request.form.get("category", "General"), amount,
+        request.form.get("note", ""), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
     con.commit(); con.close()
+    return redirect(url_for("admin") + "#finance")
+
+
+@app.route("/admin/employee", methods=["POST"])
+def add_employee():
+    con = db()
+    con.execute("INSERT INTO employees(name,role,status,phone,created_at) VALUES(?,?,?,?,?)", (
+        request.form.get("name", "New Employee"), request.form.get("role", "Team"),
+        request.form.get("status", "Active"), request.form.get("phone", ""),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+    con.commit(); con.close()
+    return redirect(url_for("admin") + "#people")
+
+
+@app.route("/admin/settings", methods=["POST"])
+def update_settings():
+    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address"]:
+        if key in request.form:
+            set_setting(key, request.form[key].strip())
+    file = request.files.get("logo")
+    if file and file.filename:
+        ext = file.filename.rsplit(".", 1)[-1].lower()
+        if ext in ALLOWED_EXTENSIONS:
+            filename = secure_filename(f"brand-logo.{ext}")
+            file.save(UPLOAD_DIR / filename)
+            set_setting("logo", filename)
+    return redirect(url_for("admin") + "#settings")
+
+
+@app.route("/admin/backup")
+def backup_db():
+    from flask import send_file
+    return send_file(DB_PATH, as_attachment=True, download_name=f"intex-backup-{date.today().isoformat()}.db")
+
+
+@app.route("/employees")
+def employees():
+    con = db()
+    team = con.execute("SELECT * FROM employees ORDER BY name").fetchall()
+    tasks = con.execute("SELECT * FROM tasks ORDER BY id DESC LIMIT 12").fetchall()
+    con.close()
+    return render_template("employees.html", team=team, tasks=tasks)
+
+
+@app.route("/employee/task", methods=["POST"])
+def add_task():
+    con = db()
+    con.execute("INSERT INTO tasks(title,owner,status,due_date,created_at) VALUES(?,?,?,?,?)", (
+        request.form.get("title", "Follow up client"), request.form.get("owner", "Team"),
+        request.form.get("status", "Open"), request.form.get("due_date", ""),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+    con.commit(); con.close()
+    return redirect(url_for("employees"))
+
+
+@app.route("/logo/<path:filename>")
+def logo_file(filename):
+    return send_from_directory(UPLOAD_DIR, filename)
+
+
+@app.route("/manifest.webmanifest")
+def manifest():
+    return jsonify({
+        "name": settings()["company_name"],
+        "short_name": "INTEX",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#f7faf8",
+        "theme_color": settings().get("primary_color", "#0b6b57"),
+        "icons": [{"src": "/static/uploads/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}],
+    })
+
+
+@app.route("/robots.txt")
+def robots():
+    return "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /employees\nSitemap: /sitemap.xml\n", 200, {"Content-Type": "text/plain"}
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    base = request.url_root.rstrip("/")
+    urls = ["/", "/services", "/contact", "/visit"]
+    xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in urls:
+        xml.append(f"<url><loc>{base}{u}</loc></url>")
+    xml.append("</urlset>")
+    return "\n".join(xml), 200, {"Content-Type": "application/xml"}
+
+
+@app.route("/sw.js")
+def sw():
+    return send_from_directory(BASE_DIR / "static", "sw.js", mimetype="application/javascript")
+
 
 init_db()
 
-def page(title, **ctx):
-    return render_template('page.html', title=title, modules=MODULES, **ctx)
-
-@app.route('/')
-def index():
-    return redirect(url_for('dashboard'))
-
-@app.route('/dashboard')
-def dashboard():
-    con=db();
-    counts={
-        'patients': con.execute('SELECT COUNT(*) FROM patients').fetchone()[0],
-        'appointments': con.execute("SELECT COUNT(*) FROM appointments WHERE status='Scheduled'").fetchone()[0],
-        'pending_bills': con.execute("SELECT COALESCE(SUM(amount),0) FROM bills WHERE status='Pending'").fetchone()[0],
-        'low_stock': con.execute('SELECT COUNT(*) FROM inventory WHERE quantity <= reorder_level').fetchone()[0],
-    }
-    recent=con.execute('''SELECT e.*, p.name, p.patient_no FROM events e JOIN patients p ON p.id=e.patient_id ORDER BY e.id DESC LIMIT 8''').fetchall(); con.close()
-    return page('Dashboard', active='dashboard', counts=counts, recent=recent)
-
-@app.route('/reception', methods=['GET','POST'])
-def reception():
-    message=None
-    if request.method=='POST':
-        f=request.form; con=db(); now=datetime.datetime.now().isoformat(timespec='seconds')
-        try:
-            cur=con.execute('INSERT INTO patients(patient_no,name,sex,age,phone,blood_group,allergies,created_at) VALUES(?,?,?,?,?,?,?,?)',
-                            (f['patient_no'],f['name'],f.get('sex'),f.get('age') or None,f.get('phone'),f.get('blood_group'),f.get('allergies'),now))
-            con.execute('INSERT INTO events(patient_id,event_type,title,detail,created_at) VALUES(?,?,?,?,?)',(cur.lastrowid,'Registration','Patient registered','Registration completed at reception.',now)); con.commit(); message='Patient registered successfully.'
-        except sqlite3.IntegrityError: message='Patient number already exists.'
-        finally: con.close()
-    return page('Reception', active='reception', message=message)
-
-@app.route('/patients')
-def patients():
-    q=request.args.get('q','').strip(); con=db()
-    if q:
-        rows=con.execute('SELECT * FROM patients WHERE name LIKE ? OR patient_no LIKE ? ORDER BY id DESC', (f'%{q}%',f'%{q}%')).fetchall()
-    else: rows=con.execute('SELECT * FROM patients ORDER BY id DESC').fetchall()
-    con.close(); return page('Patients', active='patients', patients=rows, q=q)
-
-@app.route('/patients/<int:pid>')
-def patient(pid):
-    con=db(); p=con.execute('SELECT * FROM patients WHERE id=?',(pid,)).fetchone(); events=con.execute('SELECT * FROM events WHERE patient_id=? ORDER BY id DESC',(pid,)).fetchall(); bills=con.execute('SELECT * FROM bills WHERE patient_id=? ORDER BY id DESC',(pid,)).fetchall(); con.close()
-    if not p: return ('Patient not found',404)
-    return page('Patient Profile', active='patients', patient=p, events=events, bills=bills)
-
-@app.route('/consultations')
-def consultations():
-    con=db(); rows=con.execute('SELECT * FROM patients ORDER BY name').fetchall(); con.close(); return page('Consultations', active='consultations', patients=rows)
-
-@app.route('/consultations/<int:pid>', methods=['GET','POST'])
-def consultation(pid):
-    con=db(); p=con.execute('SELECT * FROM patients WHERE id=?',(pid,)).fetchone()
-    if not p: con.close(); return ('Patient not found',404)
-    if request.method=='POST':
-        now=datetime.datetime.now().isoformat(timespec='seconds'); title=request.form.get('title','Consultation'); detail=request.form.get('notes','')
-        con.execute('INSERT INTO events(patient_id,event_type,title,detail,created_at) VALUES(?,?,?,?,?)',(pid,'Consultation',title,detail,now));
-        con.commit(); con.close(); return redirect(url_for('patient',pid=pid))
-    history=con.execute('SELECT * FROM events WHERE patient_id=? ORDER BY id DESC',(pid,)).fetchall(); con.close(); return page('Consultation', active='consultations', patient=p, history=history)
-
-@app.route('/appointments')
-def appointments():
-    con=db(); rows=con.execute('SELECT a.*,p.name,p.patient_no FROM appointments a JOIN patients p ON p.id=a.patient_id ORDER BY a.appointment_date').fetchall(); patients=con.execute('SELECT * FROM patients ORDER BY name').fetchall(); con.close(); return page('Appointments', active='appointments', appointments=rows, patients=patients)
-
-@app.route('/appointments/add', methods=['POST'])
-def appointments_add():
-    con=db(); con.execute('INSERT INTO appointments(patient_id,appointment_date,doctor,reason) VALUES(?,?,?,?)',(request.form['patient_id'],request.form['appointment_date'],request.form['doctor'],request.form['reason'])); con.commit(); con.close(); return redirect(url_for('appointments'))
-
-@app.route('/pharmacy')
-def pharmacy():
-    con=db(); stock=con.execute('SELECT * FROM inventory WHERE category="Pharmacy" ORDER BY item').fetchall(); con.close(); return page('Pharmacy', active='pharmacy', stock=stock)
-
-@app.route('/laboratory')
-def laboratory(): return page('Laboratory', active='laboratory', tests=['CBC','U&E','Liver Function','Malaria Screen','Urinalysis','Blood Group','Pregnancy Test'])
-@app.route('/admissions')
-def admissions(): return page('Admissions', active='admissions', beds=[('Ward A',12,8),('Ward B',10,4),('Maternity',8,6),('Pediatric',10,7)])
-
-@app.route('/billing')
-def billing():
-    con=db(); bills=con.execute('SELECT b.*,p.name,p.patient_no FROM bills b JOIN patients p ON p.id=b.patient_id ORDER BY b.id DESC').fetchall(); patients=con.execute('SELECT * FROM patients ORDER BY name').fetchall(); con.close(); return page('Billing', active='billing', bills=bills, patients=patients)
-
-@app.route('/billing/add', methods=['POST'])
-def billing_add():
-    con=db(); con.execute('INSERT INTO bills(patient_id,description,amount,created_at) VALUES(?,?,?,?)',(request.form['patient_id'],request.form['description'],request.form['amount'],datetime.datetime.now().isoformat(timespec='seconds'))); con.commit(); con.close(); return redirect(url_for('billing'))
-
-@app.route('/inventory')
-def inventory():
-    con=db(); rows=con.execute('SELECT * FROM inventory ORDER BY item').fetchall(); con.close(); return page('Inventory', active='inventory', inventory=rows)
-@app.route('/reports')
-def reports(): return page('Reports', active='reports', report_types=['Daily Operations','Patient Activity','Billing Summary','Pharmacy Stock','Laboratory Activity','Admissions & Discharges','Audit Summary'])
-@app.route('/ai-assistant')
-def ai_assistant(): return page('AI Assistant', active='ai_assistant')
-@app.route('/backups')
-def backups(): return page('Backups', active='backups', backup_file=os.path.basename(DB), backup_time=datetime.datetime.fromtimestamp(os.path.getmtime(DB)).isoformat(timespec='seconds'))
-@app.route('/administration')
-def administration(): return page('Administration', active='administration')
-
-@app.route('/api/patient/<int:pid>')
-def api_patient(pid):
-    con=db(); p=con.execute('SELECT * FROM patients WHERE id=?',(pid,)).fetchone(); e=con.execute('SELECT * FROM events WHERE patient_id=? ORDER BY id DESC',(pid,)).fetchall(); con.close()
-    if not p: return jsonify({'error':'not found'}),404
-    return jsonify({'patient':dict(p),'timeline':[dict(x) for x in e]})
-
-@app.route('/sw.js')
-def sw(): return app.send_static_file('sw.js'), {'Content-Type':'application/javascript'}
-
-if __name__=='__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT',5000)), debug=False)
+if __name__ == "__main__":
+    app.run(debug=True)

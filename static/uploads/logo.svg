@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 160">
+  <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#0b6b57"/><stop offset="1" stop-color="#19a879"/></linearGradient></defs>
+  <rect width="560" height="160" rx="36" fill="#f8fcfa"/>
+  <path d="M58 79c0-29 24-52 53-52h28l24 27-24 27h-28c-8 0-15 7-15 15s7 15 15 15h28l24-27 26 27-27 29h-23c-44 0-81-24-81-61z" fill="url(#g)"/>
+  <circle cx="111" cy="79" r="10" fill="#fff"/>
+  <text x="192" y="80" font-family="Arial,Helvetica,sans-serif" font-weight="800" font-size="42" fill="#12352e">INTEX</text>
+  <text x="194" y="111" font-family="Arial,Helvetica,sans-serif" font-weight="600" font-size="19" fill="#518176" letter-spacing="2">PEST LIMITED</text>
+</svg>
