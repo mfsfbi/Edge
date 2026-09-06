@@ -40,3 +40,87 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 @media(max-width:930px){.trust-grid,.visit-grid{grid-template-columns:1fr}.signal-cards{grid-template-columns:repeat(2,1fr)}.quote-strip-in{padding:20px 0}.closing-grid{align-items:flex-start;flex-direction:column}.visit-card{min-height:220px}}
 @media(max-width:680px){.nav-links{display:none}.quote-strip-in{align-items:flex-start;flex-direction:column}.quote-strip .btn{width:100%}.visual-frame{height:220px}.signal-cards{grid-template-columns:1fr}.trust-metrics{grid-template-columns:1fr 1fr}.visit-card{grid-template-columns:1fr}.qr-art{width:128px;height:128px}.qr-art svg{width:88px;height:88px}.nav-quote svg{width:17px;height:17px}.hero-v2{padding-top:52px}}
 @media(max-width:430px){.trust-metrics{grid-template-columns:1fr}.quote-strip strong{font-size:19px}.service-content{padding:22px}.signal-cards>div{min-height:145px}.visit-copy,.visit-card{padding:24px}}
+
+
+/* INTEX 2026 visitor/private separation + maroon public chrome */
+:root{--spu-maroon:#741b3d;--spu-maroon-dark:#5c1530;--spu-gold:#c8a04b}
+.public-chrome.navy-band,.public-chrome.navy-nav{background:var(--spu-maroon);color:#fff}
+.public-chrome.navy-nav{border-bottom:1px solid rgba(255,255,255,.14)}
+.public-chrome .nav-links a{color:#fff}
+.public-chrome .utility-right a{color:#fff}
+.public-chrome .nav-quote{background:#fff;color:var(--spu-maroon);box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.public-chrome .nav-quote svg{color:var(--spu-maroon)}
+.menu-btn{color:#fff}
+.quote-strip{background:var(--spu-maroon);color:#fff}
+.quote-strip .btn-wa{background:#25d366!important;color:#fff!important;border-color:#25d366!important}
+.quote-strip .btn-wa svg{color:#fff;flex:0 0 auto}
+.quote-strip .btn-wa span{opacity:1}
+
+/* Public drawer: useful visitor navigation, never private routes */
+.mobile-drawer{background:var(--spu-maroon);border-color:rgba(255,255,255,.1);padding:18px}
+.drawer-heading{padding:6px 10px 14px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:8px}
+.drawer-heading span{display:block;font-size:15px;font-weight:950;letter-spacing:.1em;color:#fff}
+.drawer-heading small{display:block;font-size:10px;color:#edcbd7;margin-top:3px}
+.mobile-drawer a{min-height:44px;border-radius:11px;padding:11px 12px;color:#fff;display:flex;align-items:center;gap:11px;font-weight:800}
+.mobile-drawer a:hover{background:rgba(255,255,255,.08)}
+.mobile-drawer svg{width:18px;height:18px;color:#f3d9e2}
+.mobile-drawer .drawer-rule{height:1px;background:rgba(255,255,255,.12);margin:8px 0}
+.mobile-drawer .drawer-quote{background:#fff;color:var(--spu-maroon);border-radius:11px}
+.mobile-drawer .drawer-quote svg{color:var(--spu-maroon)}
+
+/* The public hero carries real pest imagery without turning into a poster */
+.hero-visual{position:relative}
+.pest-orb{position:absolute;z-index:2;display:grid;place-items:center;width:94px;height:94px;border-radius:24px;background:rgba(255,255,255,.94);box-shadow:0 18px 45px rgba(8,35,58,.18);overflow:hidden;border:1px solid rgba(255,255,255,.75)}
+.pest-orb img{width:100%;height:100%;object-fit:contain;padding:8px}
+.pest-orb-a{top:-18px;right:8px;transform:rotate(7deg)}
+.pest-orb-b{bottom:18px;left:-18px;transform:rotate(-6deg)}
+.pest-orb-c{bottom:-16px;right:18px;transform:rotate(5deg)}
+.hero-core{position:relative;z-index:3}
+.service-tag svg{width:19px;height:19px}
+
+.trust-note{display:flex;align-items:center;gap:9px;margin-top:18px;font-size:12px;color:var(--muted);font-weight:700}
+.trust-note svg{width:18px;height:18px;color:var(--spu-maroon);flex:0 0 auto}
+.closing-cta .btn-dark{background:#fff;color:var(--spu-maroon);border-color:#fff}
+.closing-actions .text-link{display:inline-flex;align-items:center;gap:7px}
+.closing-actions .text-link svg{width:16px;height:16px}
+
+/* Private workspaces deliberately do not inherit public nav/footer/chat/WhatsApp */
+.private-shell{background:#f4f7fa;color:#10263b;min-height:100vh}
+.private-nav{background:var(--spu-maroon);color:#fff;border-bottom:1px solid rgba(255,255,255,.12);position:sticky;top:0;z-index:20}
+.private-nav-in{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.private-brand{display:flex;align-items:center;gap:12px}
+.private-brand strong{display:block;font-size:14px;letter-spacing:-.01em}
+.private-brand small{display:block;color:#eac8d4;font-size:10px;margin-top:2px}
+.private-mark{width:36px;height:36px;border-radius:10px;background:#fff;color:var(--spu-maroon);display:grid;place-items:center;font-weight:950;box-shadow:0 8px 20px rgba(0,0,0,.14)}
+.private-links{display:flex;gap:8px;flex-wrap:wrap}
+.private-links a{color:#fff;text-decoration:none;font-size:12px;font-weight:800;padding:10px 12px;border:1px solid rgba(255,255,255,.18);border-radius:10px}
+.private-links a:hover{background:rgba(255,255,255,.08)}
+.private-main{padding:44px 0 70px}
+.private-heading{margin-bottom:26px}
+.private-heading h1{font-size:clamp(38px,5vw,58px);letter-spacing:-.05em;margin:9px 0 10px}
+.private-heading p{color:var(--muted);margin:0;max-width:680px}
+.private-kpis{margin-bottom:20px}
+.private-card{background:#fff;border-color:#d9e2ea;box-shadow:0 12px 36px rgba(8,35,58,.07)}
+.private-card .card-head h2{font-size:26px}
+.private-shell .btn-dark{background:var(--spu-maroon);border-color:var(--spu-maroon)}
+.private-shell .btn-dark:hover{background:var(--spu-maroon-dark);border-color:var(--spu-maroon-dark)}
+.private-shell .section-label{color:var(--spu-maroon)}
+.private-shell .status-pill{background:#f1e6eb;color:var(--spu-maroon)}
+.private-shell .positive{color:#0f7b54}.private-shell .negative{color:#b42318}
+
+@media(max-width:680px){
+  .pest-orb{width:74px;height:74px;border-radius:18px}
+  .pest-orb-a{top:-10px;right:2px}.pest-orb-b{bottom:8px;left:-8px}.pest-orb-c{bottom:-9px;right:10px}
+  .private-nav-in{min-height:64px}.private-links a{padding:8px 9px;font-size:10px}.private-main{padding-top:30px}
+}
+@media(max-width:430px){.pest-orb-a{display:none}.pest-orb-b{left:-4px}.pest-orb-c{right:4px}}
+
+.public-chrome + .mobile-drawer + main{} /* keeps public chrome styling intentionally scoped */
+.navy-footer{background:var(--spu-maroon)!important}
+.navy-footer .footer-brand p,.navy-footer .footer-main a,.navy-footer .footer-main span{color:#edd6df}
+.navy-footer .footer-title{color:#f1cfd9}
+.navy-footer .signature-line{border-color:rgba(255,255,255,.16)}
+.navy-footer .signature-line strong{color:#f1c5d3}
+.navy-footer .footer-bottom{border-color:rgba(255,255,255,.14);color:#d7b4c2}
+.navy-footer .social{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15)}
+.navy-footer .social-fb{color:#1877f2}.navy-footer .social-ig{color:#ff7a9a}.navy-footer .social-in{color:#79b8ff}.navy-footer .social-x{color:#fff}

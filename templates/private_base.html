@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}{{ site.company_name }}{% endblock %}</title>
+<meta name="theme-color" content="#6f1738">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="private-shell">
+<header class="private-nav">
+  <div class="wrap private-nav-in">
+    <div class="private-brand"><span class="private-mark">I</span><div><strong>{{ site.company_name }}</strong><small>{% block role_label %}Private workspace{% endblock %}</small></div></div>
+    <div class="private-links">
+      <a href="/">Public site</a>
+      {% block private_links %}{% endblock %}
+    </div>
+  </div>
+</header>
+{% block content %}{% endblock %}
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<script>if(window.lucide) window.lucide.createIcons();</script>
+</body>
+</html>

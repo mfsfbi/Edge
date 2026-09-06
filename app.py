@@ -80,7 +80,7 @@ def init_db():
         "domain": "https://www.intex.co.ke",
         "address": "Nairobi, Kenya",
         "logo": "logo.svg",
-        "primary_color": "#0b6b57",
+        "primary_color": "#741b3d",
         "facebook": "",
         "instagram": "",
         "linkedin": "",

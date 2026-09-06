@@ -5,7 +5,7 @@
 <title>{% block title %}{{ site.company_name }} — Pest Management{% endblock %}</title>
 <meta name="description" content="Professional pest management in Kenya for homes, businesses and institutions. Fast response, clear reporting and practical prevention from {{ site.company_name }}.">
 <meta name="keywords" content="pest control Kenya, pest management Nairobi, fumigation Kenya, bed bug control, termite control, rodent control, mosquito control, commercial pest control">
-<meta name="theme-color" content="{{ site.primary_color }}">
+<meta name="theme-color" content="#6f1738">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Professional pest management for homes, businesses and institutions."><meta property="og:type" content="website"><meta property="og:url" content="{{ site.domain }}{{ request.path }}">
 <link rel="canonical" href="{{ site.domain }}{{ request.path }}">
@@ -14,13 +14,24 @@
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Professional pest management services."}</script>
 </head>
 <body>
-<div class="utility navy-band"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Professional pest management</span></div><div class="utility-right"><span>Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
-<header class="site-nav navy-nav"><div class="wrap nav-in">
+<div class="utility public-chrome"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Professional pest management</span></div><div class="utility-right"><span>Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
+<header class="site-nav public-chrome"><div class="wrap nav-in">
 <a href="/" class="brand" aria-label="{{ site.company_name }} home"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }} logo"></a>
-<nav class="nav-links"><a href="/services">Services</a><a href="/contact">Contact</a><a href="/visit">Visitor QR</a><a class="nav-quote" href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20need%20pest%20control%20assistance"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.2A12.7 12.7 0 0 0 5 22.2L3.4 28.5 9.9 27a12.8 12.8 0 1 0 6.1-23.8Zm0 22.9a10.1 10.1 0 0 1-5.1-1.4l-.4-.2-3.9.9 1-3.8-.3-.4A10.1 10.1 0 1 1 16 26.1Zm5.5-7.4c-.3-.2-1.9-.9-2.2-1s-.5-.2-.8.2-.9 1-1.1 1.2-.4.2-.7.1a8.3 8.3 0 0 1-2.4-1.5 9.2 9.2 0 0 1-1.7-2.1c-.2-.3 0-.5.2-.7l.5-.6c.2-.2.2-.4.3-.6s0-.4-.1-.6c-.1-.2-.8-1.8-1.1-2.5-.3-.6-.6-.5-.8-.5h-.7c-.2 0-.6.1-.9.4-.3.3-1.1 1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.1 3.2 5 4.4.7.3 1.3.2 1.9.1.6-.1 1.9-.8 2.2-1.6.3-.8.3-1.5.2-1.6-.1-.1-.3-.2-.6-.3Z" fill="currentColor"/> </svg> Get a quote <span>↗</span></a></nav>
+<nav class="nav-links"><a href="/#services">Services</a><a href="/#contact">Contact</a><a href="/visit">Visitor QR</a><a class="nav-quote" href="/contact"><i data-lucide="file-text"></i> Get a Quote <span>↗</span></a></nav>
 <button class="menu-btn" aria-label="Open menu" aria-expanded="false">☰</button>
 </div></header>
-<div class="mobile-drawer"><a href="/services"><i data-lucide="shield-check"></i> Services</a><a href="/contact"><i data-lucide="message-circle"></i> Contact</a><a href="/visit"><i data-lucide="qr-code"></i> Visitor QR</a><a class="drawer-quote" href="https://wa.me/{{ site.whatsapp }}"><i data-lucide="phone-call"></i> Get a quote</a></div>
+<div class="mobile-drawer">
+  <div class="drawer-heading"><span>INTEX</span><small>Navigate the public site</small></div>
+  <a href="/#home"><i data-lucide="house"></i> Home</a>
+  <a href="/#services"><i data-lucide="shield-check"></i> Services</a>
+  <a href="/#how-we-work"><i data-lucide="route"></i> How we work</a>
+  <a href="/#trust"><i data-lucide="star"></i> Trust & ratings</a>
+  <a href="/#find-us"><i data-lucide="map-pin"></i> Find us</a>
+  <a href="/visit"><i data-lucide="qr-code"></i> Visitor QR</a>
+  <a href="/contact"><i data-lucide="phone"></i> Contact</a>
+  <div class="drawer-rule"></div>
+  <a class="drawer-quote" href="/contact"><i data-lucide="send"></i> Request a quote</a>
+</div>
 {% block content %}{% endblock %}
 
 <div class="assistant" aria-live="polite">
@@ -31,15 +42,11 @@
   </div>
   <button type="button" class="chat-trigger" aria-label="Open assistant" aria-expanded="false"><span>✦</span></button>
 </div>
-<a href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20need%20help%20with%20pest%20control" class="whatsapp-float" aria-label="Chat on WhatsApp">
-  <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.2A12.7 12.7 0 0 0 5 22.2L3.4 28.5 9.9 27a12.8 12.8 0 1 0 6.1-23.8Zm0 22.9a10.1 10.1 0 0 1-5.1-1.4l-.4-.2-3.9.9 1-3.8-.3-.4A10.1 10.1 0 1 1 16 26.1Zm5.5-7.4c-.3-.2-1.9-.9-2.2-1s-.5-.2-.8.2-.9 1-1.1 1.2-.4.2-.7.1a8.3 8.3 0 0 1-2.4-1.5 9.2 9.2 0 0 1-1.7-2.1c-.2-.3 0-.5.2-.7l.5-.6c.2-.2.2-.4.3-.6s0-.4-.1-.6c-.1-.2-.8-1.8-1.1-2.5-.3-.6-.6-.5-.8-.5h-.7c-.2 0-.6.1-.9.4-.3.3-1.1 1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.1 3.2 5 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.9-.8 2.2-1.6.3-.8.3-1.5.2-1.6-.1-.1-.3-.2-.6-.3Z" fill="currentColor"/></svg>
-  <span class="wa-label">WhatsApp</span>
-</a>
-<footer class="site-footer navy-footer">
+<footer class="site-footer navy-footer" id="contact">
   <div class="wrap footer-main">
-    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Professional pest management designed around real properties, real people and fast decisions.</p><div class="signature-line"><span>Digital experience engineered by</span><strong>Toror Technology Company & Innovations</strong></div></div>
-    <div><span class="footer-title">Navigate</span><a href="/services">Services</a><a href="/contact">Contact</a><a href="/visit">Visitor QR</a></div>
-    <div><span class="footer-title">Contact</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><a href="mailto:{{ site.email }}">{{ site.email }}</a><span>{{ site.address }}</span></div>
+    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Field-tested pest management for modern homes, businesses and institutions.</p><div class="signature-line"><span>Digital experience by</span><strong>Toror Technology Company & Innovations</strong></div></div>
+    <div><span class="footer-title">Explore</span><a href="/#services">Services</a><a href="/visit">Visitor check-in</a><a href="/contact">Contact</a></div>
+    <div><span class="footer-title">Reach us</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><a href="mailto:{{ site.email }}">{{ site.email }}</a><span>{{ site.address }}</span></div>
     <div><span class="footer-title">Connect</span><div class="socials">
       {% if site.facebook %}<a class="social social-fb" href="{{ site.facebook }}" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24"><path d="M14 8h3V4h-3c-3.3 0-5 1.8-5 5v3H6v4h3v4h4v-4h3.2l.8-4H13V9c0-.7.3-1 1-1Z"/></svg></a>{% endif %}
       {% if site.instagram %}<a class="social social-ig" href="{{ site.instagram }}" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.7" r="1.1"/></svg></a>{% endif %}
@@ -47,7 +54,7 @@
       {% if site.x %}<a class="social social-x" href="{{ site.x }}" target="_blank" rel="noopener" aria-label="X"><svg viewBox="0 0 24 24"><path d="M4 3h4.8l4.1 5.6L17.6 3H20l-5.9 7 6.1 11h-4.8l-4.5-6.2L5.4 21H3l6.1-7.5L4 3Zm4 2 7.6 14h1.6L9.6 5H8Z" fill="currentColor"/></svg></a>{% endif %}
     </div></div>
   </div>
-  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Built for speed · PWA ready · Search ready</span></div>
+  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Nairobi · Kenya</span></div>
 </footer>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script src="/static/js/app.js"></script>
 </body></html>
