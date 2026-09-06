@@ -1,7 +1,7 @@
 const qs=(s,r=document)=>r.querySelector(s);
 const qsa=(s,r=document)=>[...r.querySelectorAll(s)];
 const menu=qs('.menu-btn'), drawer=qs('.mobile-drawer');
-if(menu&&drawer){menu.addEventListener('click',()=>{const open=drawer.classList.toggle('show');menu.setAttribute('aria-expanded',String(open));});}
+if(menu&&drawer){menu.addEventListener('click',()=>{const open=drawer.classList.toggle('show');menu.setAttribute('aria-expanded',String(open));document.body.classList.toggle('menu-open',open);});drawer.addEventListener('click',e=>{if(e.target.closest('a')){drawer.classList.remove('show');menu.setAttribute('aria-expanded','false');document.body.classList.remove('menu-open');}});}
 const map=qs('#intex-map');
 if(map){const lat=Number(map.dataset.lat||-1.2921),lng=Number(map.dataset.lng||36.8219),label=map.dataset.label||'INTEX Pest Limited';const iframe=document.createElement('iframe');iframe.loading='lazy';iframe.referrerPolicy='no-referrer-when-downgrade';iframe.title='Map to INTEX Pest Limited';const d=0.02;iframe.src=`https://www.openstreetmap.org/export/embed.html?bbox=${lng-d}%2C${lat-d}%2C${lng+d}%2C${lat+d}&layer=mapnik&marker=${lat}%2C${lng}`;map.appendChild(iframe);const pin=document.createElement('div');pin.className='map-pin';pin.innerHTML=`<span></span><strong>${label}</strong>`;map.appendChild(pin);}
 if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
