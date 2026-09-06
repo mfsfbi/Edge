@@ -2,49 +2,48 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{% block title %}{{ site.company_name }} — Pest Management{% endblock %}</title>
-<meta name="description" content="Professional pest management in Kenya for homes, businesses and institutions. Fast response, clear reporting and practical prevention from {{ site.company_name }}.">
-<meta name="keywords" content="pest control Kenya, pest management Nairobi, fumigation Kenya, bed bug control, termite control, rodent control, mosquito control, commercial pest control">
-<meta name="theme-color" content="#6f1738">
+<title>{% block title %}{{ site.company_name }} — Pharmaceuticals & Chemical Formulation{% endblock %}</title>
+<meta name="description" content="{{ site.company_name }} — pharmaceutical formulation, laboratory operations, quality control, production and technical services in Kenya.">
+<meta name="keywords" content="pharmaceuticals Kenya, pharmaceutical formulation, chemical formulation, laboratory, quality control, manufacturing, production, raw materials, packaging">
+<meta name="theme-color" content="#741b3d">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
-<meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Professional pest management for homes, businesses and institutions."><meta property="og:type" content="website"><meta property="og:url" content="{{ site.domain }}{{ request.path }}">
+<meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Pharmaceutical formulation, laboratory, production and quality-focused operations."><meta property="og:type" content="website"><meta property="og:url" content="{{ site.domain }}{{ request.path }}">
 <link rel="canonical" href="{{ site.domain }}{{ request.path }}">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/static/uploads/{{ site.logo }}">
 <link rel="stylesheet" href="/static/css/app.css">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Professional pest management services."}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Pharmaceutical formulation, laboratory, production and quality-focused operations."}</script>
 </head>
 <body>
-<div class="utility public-chrome"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Professional pest management</span></div><div class="utility-right"><span>Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
+<div class="utility public-chrome"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Pharmaceuticals · Formulation · Quality</span></div><div class="utility-right"><span>Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
 <header class="site-nav public-chrome"><div class="wrap nav-in">
 <a href="/" class="brand" aria-label="{{ site.company_name }} home"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }} logo"></a>
-<button class="menu-btn" aria-label="Open menu" aria-expanded="false"><i data-lucide="menu"></i><span class="sr-only">Menu</span></button>
+<button class="menu-btn" aria-label="Open menu" aria-expanded="false" type="button"><i data-lucide="menu"></i><span class="sr-only">Menu</span></button>
 </div></header>
-<div class="mobile-drawer">
-  <div class="drawer-heading"><span>INTEX</span><small>Public navigation</small></div>
+<div class="mobile-drawer" aria-label="Site navigation">
+  <div class="drawer-heading"><span>INTEX</span><small>Pharmaceutical operations</small></div>
   <a href="/#home"><i data-lucide="house"></i> Home</a>
-  <a href="/#services"><i data-lucide="shield-check"></i> Services</a>
-  <a href="/#trust"><i data-lucide="star"></i> Trust & ratings</a>
-  <a href="/#find-us"><i data-lucide="map-pin"></i> Find us</a>
+  <a href="/#formulation"><i data-lucide="flask-conical"></i> Formulation & mixing</a>
+  <a href="/#laboratory"><i data-lucide="microscope"></i> Laboratory</a>
+  <a href="/#production"><i data-lucide="factory"></i> Production</a>
+  <a href="/#quality"><i data-lucide="badge-check"></i> Quality & compliance</a>
+  <a href="/#products"><i data-lucide="pill"></i> Products</a>
+  <a href="/#research"><i data-lucide="dna"></i> Research & development</a>
+  <a href="/#materials"><i data-lucide="boxes"></i> Materials & inventory</a>
+  <a href="/#process"><i data-lucide="workflow"></i> Process overview</a>
+  <a href="/services"><i data-lucide="layers-3"></i> Services</a>
   <a href="/contact"><i data-lucide="phone"></i> Contact</a>
-  <a href="/visit"><i data-lucide="qr-code"></i> Visitor QR</a>
+  <a href="/visit"><i data-lucide="qr-code"></i> Facility visit</a>
 </div>
 {% block content %}{% endblock %}
 
-
 <footer class="site-footer navy-footer" id="contact">
   <div class="wrap footer-main">
-    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Field-tested pest management for modern homes, businesses and institutions.</p><div class="signature-line"><span>Digital experience by</span><strong>Toror Technology Company & Innovations</strong></div></div>
-    <div><span class="footer-title">Explore</span><a href="/#services">Services</a><a href="/visit">Visitor check-in</a><a href="/contact">Contact</a></div>
+    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Pharmaceutical formulation, technical operations and quality-focused support for healthcare and industrial needs.</p><div class="signature-line"><span>Digital experience by</span><strong>Toror Technology Company & Innovations</strong></div></div>
+    <div><span class="footer-title">Explore</span><a href="/#formulation">Formulation</a><a href="/#laboratory">Laboratory</a><a href="/#quality">Quality</a><a href="/#products">Products</a></div>
+    <div><span class="footer-title">Operations</span><a href="/#production">Production</a><a href="/#materials">Materials</a><a href="/#research">R&amp;D</a><a href="/services">Services</a></div>
     <div><span class="footer-title">Reach us</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><a href="mailto:{{ site.email }}">{{ site.email }}</a><span>{{ site.address }}</span></div>
-    <div><span class="footer-title">Connect</span><div class="socials">
-      <a class="social social-fb{% if not site.facebook %} social-empty{% endif %}" href="{{ site.facebook or '#' }}"{% if site.facebook %} target="_blank" rel="noopener"{% else %} aria-disabled="true" tabindex="-1"{% endif %} aria-label="Facebook"><svg viewBox="0 0 24 24"><path d="M14 8h3V4h-3c-3.3 0-5 1.8-5 5v3H6v4h3v4h4v-4h3.2l.8-4H13V9c0-.7.3-1 1-1Z" fill="currentColor"/></svg></a>
-      <a class="social social-ig{% if not site.instagram %} social-empty{% endif %}" href="{{ site.instagram or '#' }}"{% if site.instagram %} target="_blank" rel="noopener"{% else %} aria-disabled="true" tabindex="-1"{% endif %} aria-label="Instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
-      <a class="social social-tt{% if not site.tiktok %} social-empty{% endif %}" href="{{ site.tiktok or '#' }}"{% if site.tiktok %} target="_blank" rel="noopener"{% else %} aria-disabled="true" tabindex="-1"{% endif %} aria-label="TikTok"><svg viewBox="0 0 24 24"><path d="M14 4h3.1c.4 1.8 1.5 3 3.1 3.5v3.1c-1.2 0-2.4-.4-3.4-1v6.1a5.3 5.3 0 1 1-5.3-5.3c.4 0 .8 0 1.2.1v3.2a2.3 2.3 0 1 0 1 2V4Z" fill="currentColor"/></svg></a>
-      <a class="social social-in{% if not site.linkedin %} social-empty{% endif %}" href="{{ site.linkedin or '#' }}"{% if site.linkedin %} target="_blank" rel="noopener"{% else %} aria-disabled="true" tabindex="-1"{% endif %} aria-label="LinkedIn"><svg viewBox="0 0 24 24"><path d="M5 8.2A2.2 2.2 0 1 1 5 3.8a2.2 2.2 0 0 1 0 4.4ZM3 10h4v11H3V10Zm7 0h3.8v1.5h.1c.5-.9 1.7-1.9 3.7-1.9 4 0 4.8 2.5 4.8 5.8V21h-4v-5c0-1.2 0-2.8-1.8-2.8s-2 1.3-2 2.7V21h-4V10Z" fill="currentColor"/></svg></a>
-      <a class="social social-x{% if not site.x %} social-empty{% endif %}" href="{{ site.x or '#' }}"{% if site.x %} target="_blank" rel="noopener"{% else %} aria-disabled="true" tabindex="-1"{% endif %} aria-label="X"><svg viewBox="0 0 24 24"><path d="M4 3h4.8l4.1 5.6L17.6 3H20l-5.9 7 6.1 11h-4.8l-4.5-6.2L5.4 21H3l6.1-7.5L4 3Zm4 2 7.6 14h1.6L9.6 5H8Z" fill="currentColor"/></svg></a>
-    </div></div>
   </div>
-  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Nairobi · Kenya</span><span class="footer-shortcuts"><a href="/#services">Services</a><a href="/#trust">Trust</a><a href="/#find-us">Find us</a><a href="/#visitor-qr">Visitor QR</a><a href="/#home">Back to top ↑</a></span></div>
+  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Nairobi · Kenya</span><span class="footer-shortcuts"><a href="/#formulation">Formulation</a><a href="/#quality">Quality</a><a href="/#products">Products</a><a href="/#home">Back to top ↑</a></span></div>
 </footer>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script src="/static/js/app.js"></script>
 </body></html>

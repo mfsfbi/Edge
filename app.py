@@ -72,8 +72,8 @@ def init_db():
         """
     )
     defaults = {
-        "company_name": "INTEX Pest Limited",
-        "tagline": "Serious pest protection. Clearly delivered.",
+        "company_name": "INTEX",
+        "tagline": "Pharmaceuticals, formulation and quality — clearly delivered.",
         "phone": "0702717779",
         "whatsapp": "254702717779",
         "email": "hello@intex.co.ke",
@@ -91,7 +91,7 @@ def init_db():
         "clients_served": "",
         "map_lat": "-1.2921",
         "map_lng": "36.8219",
-        "map_label": "INTEX Pest Limited — Nairobi, Kenya",
+        "map_label": "INTEX — Nairobi, Kenya",
     }
     for key, value in defaults.items():
         con.execute("INSERT OR IGNORE INTO settings(key,value) VALUES (?,?)", (key, value))
@@ -101,7 +101,7 @@ def init_db():
             [
                 ("Field Team Lead", "Operations", "Active", "0700000000", datetime.utcnow().isoformat()),
                 ("Client Service Desk", "Customer Care", "Active", "0711111111", datetime.utcnow().isoformat()),
-                ("Technical Officer", "Pest Management", "Active", "0722222222", datetime.utcnow().isoformat()),
+                ("Technical Officer", "Pharmaceutical Operations", "Active", "0722222222", datetime.utcnow().isoformat()),
             ],
         )
     con.commit()
@@ -179,7 +179,7 @@ def pulse_receiver():
     """
     return jsonify({
         "ok": True,
-        "service": "intex-pest",
+        "service": "intex-pharma",
         "pulse": "received",
         "status": "alive",
         "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -191,19 +191,24 @@ def chat():
     q = ((request.get_json(silent=True) or {}).get("message") or "").lower().strip()
     s = settings()
     if any(x in q for x in ["price", "cost", "quote", "how much"]):
-        a = f"We can prepare a tailored estimate. Call {s['phone']} or WhatsApp us for a quick assessment."
-    elif any(x in q for x in ["bed bug", "bedbugs"]):
-        a = "Bed bug treatment is one of our specialist services. Tell us your area and we can arrange an assessment."
-    elif any(x in q for x in ["mosquito", "cockroach", "termite", "rodent", "rat", "snake", "fly"]):
-        a = "Yes — our field team handles a wide range of residential and commercial pest problems."
+        a = f"We can prepare a tailored estimate. Call {s['phone']} or WhatsApp us for a technical enquiry."
+    elif any(x in q for x in ["formulation", "mixing", "batch"]):
+        a = "Our workflow is organized around approved formulation references, controlled batch preparation, mixing records, sampling and quality review. Specific recipes and process parameters should come from authorized technical documentation."
+    elif any(x in q for x in ["laboratory", "lab", "testing", "analysis"]):
+        a = "Laboratory work can be organized around sample registration, test records, analysis, result capture and review linked to the relevant product or batch."
+    elif any(x in q for x in ["quality", "qc", "compliance"]):
+        a = "Quality operations can cover document control, checks, holds, deviations, approvals, traceability and final release decisions."
+    elif any(x in q for x in ["product", "products", "medicine", "pharmaceutical"]):
+        a = "The product catalogue can be organized by product family, formulation or dosage form, specifications, packaging and release status."
     elif any(x in q for x in ["location", "where", "nairobi"]):
-        a = f"We serve clients across Nairobi and beyond. Current office location: {s['address']}."
+        a = f"Current office location: {s['address']}."
     elif any(x in q for x in ["hours", "open", "working"]):
-        a = "Our customer desk can route enquiries during business hours; urgent cases can start through WhatsApp."
+        a = "Our customer desk can route enquiries during business hours; urgent technical enquiries can start through WhatsApp."
+    elif any(x in q for x in ["contact", "phone", "email", "quote", "enquiry"]):
+        a = f"You can contact {s['company_name']} at {s['phone']} or {s['email']}."
     else:
-        a = f"I can help with services, quotes, pest problems and contact details. You can also call {s['phone']}."
+        a = f"I can help with pharmaceutical formulation, laboratory work, production, quality, products and contact details. You can also call {s['phone']}."
     return jsonify({"reply": a})
-
 
 @app.route("/api/site")
 def api_site():
@@ -297,7 +302,7 @@ def employees():
     descriptions = {
         "Operations": "Coordinates field work, scheduling and site follow-through.",
         "Customer Care": "Handles client communication, enquiries and follow-up.",
-        "Pest Management": "Carries out inspections, treatment and field reporting.",
+        "Pharmaceutical Operations": "Supports formulation, production, laboratory coordination and controlled operational records.",
     }
     roles = []
     seen = set()

@@ -1,19 +1,18 @@
-# Toror Technologies Hospital Management System (TTHMS)
+# INTEX — Pharmaceutical Public Site
 
-A direct-link prototype of a hospital management platform. Authentication is intentionally disabled in this version so the ICT team can access modules through routes/links while the workflow is being developed.
+This build keeps the existing INTEX visual identity and compact maroon navigation while refocusing the public experience on pharmaceutical and chemical-formulation operations.
 
-## Run locally
-```bash
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
-```
-Open `http://127.0.0.1:5000/dashboard`.
+## Public experience
+- Pharmaceutical formulation and controlled mixing
+- Laboratory and sample workflow
+- Production and batch operations
+- Quality assurance / quality control
+- Product catalogue structure
+- Research & development
+- Materials and inventory
+- Process overview
+- Technical / commercial contact
+- Facility visitor check-in
 
-## Included prototype modules
-Dashboard, Reception, Appointments, Patients + medical timeline, Consultations, Laboratory, Pharmacy, Admissions, Billing, Inventory, Reports, AI Assistant scaffold, Backups, Administration.
-
-## Data
-SQLite database is created automatically in `instance/tthms.db` and seeded with demo records. Back up the `instance/` directory during development. Production should add encrypted backup/export, proper authentication/authorization, audit controls, and clinical safety validation before patient use.
+## Safety boundary
+The site records and presents approved operational concepts; it does not invent chemical recipes, dosages, process parameters or hazardous mixing instructions. Company-authorized technical documentation remains the source of truth for those details.
