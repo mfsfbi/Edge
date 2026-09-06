@@ -81,6 +81,12 @@ def init_db():
         "address": "Nairobi, Kenya",
         "logo": "logo.svg",
         "primary_color": "#0b6b57",
+        "facebook": "",
+        "instagram": "",
+        "linkedin": "",
+        "map_lat": "-1.2921",
+        "map_lng": "36.8219",
+        "map_label": "INTEX Pest Limited — Nairobi, Kenya",
     }
     for key, value in defaults.items():
         con.execute("INSERT OR IGNORE INTO settings(key,value) VALUES (?,?)", (key, value))
@@ -158,6 +164,23 @@ def visit():
     return render_template("visit.html", success=False, token=None)
 
 
+@app.route("/pulse_receiver", methods=["GET", "POST", "HEAD", "OPTIONS"])
+def pulse_receiver():
+    """Lightweight keep-alive endpoint for the Breathe heartbeat service.
+
+    Accepts the heartbeat methods without touching application data and always
+    returns HTTP 200 so an external uptime/keep-alive service can confirm the
+    service is awake.
+    """
+    return jsonify({
+        "ok": True,
+        "service": "intex-pest",
+        "pulse": "received",
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }), 200
+
+
 @app.route("/api/chat", methods=["POST"])
 def chat():
     q = ((request.get_json(silent=True) or {}).get("message") or "").lower().strip()
@@ -175,6 +198,11 @@ def chat():
     else:
         a = f"I can help with services, quotes, pest problems and contact details. You can also call {s['phone']}."
     return jsonify({"reply": a})
+
+
+@app.route("/api/site")
+def api_site():
+    return jsonify(settings())
 
 
 @app.route("/admin")
@@ -225,7 +253,7 @@ def add_employee():
 
 @app.route("/admin/settings", methods=["POST"])
 def update_settings():
-    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address"]:
+    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address", "facebook", "instagram", "linkedin", "map_lat", "map_lng", "map_label"]:
         if key in request.form:
             set_setting(key, request.form[key].strip())
     file = request.files.get("logo")
@@ -279,7 +307,7 @@ def manifest():
         "display": "standalone",
         "background_color": "#f7faf8",
         "theme_color": settings().get("primary_color", "#0b6b57"),
-        "icons": [{"src": "/static/uploads/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}],
+        "icons": [{"src": "/static/uploads/" + settings().get("logo", "logo.svg"), "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}],
     })
 
 

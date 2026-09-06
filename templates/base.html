@@ -1,19 +1,53 @@
-<!doctype html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{{ site.company_name }} — Pest Protection{% endblock %}</title>
-<meta name="description" content="Professional pest control and pest management in Kenya. Residential, commercial and institutional solutions from INTEX Pest Limited.">
-<meta name="keywords" content="pest control Kenya, fumigation Nairobi, bed bug treatment, termite control, mosquito control, rodent control">
-<meta name="theme-color" content="{{ site.primary_color }}"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/static/uploads/logo.svg">
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}{{ site.company_name }} — Pest Management{% endblock %}</title>
+<meta name="description" content="Professional pest management in Kenya for homes, businesses and institutions. Fast response, clear reporting and practical prevention from {{ site.company_name }}.">
+<meta name="keywords" content="pest control Kenya, pest management Nairobi, fumigation Kenya, bed bug control, termite control, rodent control, mosquito control, commercial pest control">
+<meta name="theme-color" content="{{ site.primary_color }}">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Professional pest management for homes, businesses and institutions."><meta property="og:type" content="website"><meta property="og:url" content="{{ site.domain }}{{ request.path }}">
 <link rel="canonical" href="{{ site.domain }}{{ request.path }}">
-<meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Professional pest management for homes, businesses and institutions."><meta property="og:type" content="website">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/static/uploads/{{ site.logo }}">
 <link rel="stylesheet" href="/static/css/app.css">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Professional pest control and management services."}</script>
-</head><body>
-<div class="topbar"><div class="container"><span>{{ site.tagline }}</span><span>Call <strong>{{ site.phone }}</strong> · Nairobi · Kenya</span></div></div>
-<header class="nav"><div class="container navin"><a href="/" class="brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }} logo"></a><nav class="navlinks"><a href="/">Home</a><a href="/services">Services</a><a href="/visit">Visitor QR</a><a href="/contact">Contact</a><a class="cta" href="https://wa.me/{{ site.whatsapp }}?text=Hello%20INTEX%2C%20I%20need%20pest%20control%20assistance">Get a Quote</a></nav><div class="mobile-menu"><button aria-label="Open menu">☰</button></div></div></header>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Professional pest management services."}</script>
+</head>
+<body>
+<div class="utility"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Protection, prevention & response</span></div><div class="utility-right"><span>Nairobi · Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
+<header class="site-nav"><div class="wrap nav-in">
+<a href="/" class="brand" aria-label="{{ site.company_name }} home"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }} logo"></a>
+<nav class="nav-links"><a href="/services">Services</a><a href="/contact">Talk to us</a><a href="/visit">Visitor QR</a><a class="nav-quote" href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20need%20pest%20control%20assistance">Get a quote <span>↗</span></a></nav>
+<button class="menu-btn" aria-label="Open menu" aria-expanded="false">☰</button>
+</div></header>
+<div class="mobile-drawer"><a href="/services">Services</a><a href="/contact">Talk to us</a><a href="/visit">Visitor QR</a><a href="/admin">Management</a><a href="/employees">Employees</a></div>
 {% block content %}{% endblock %}
-<div class="chat"><div class="chat-head"><strong>INTEX Assistant</strong><button class="chat-close" style="border:0;background:none;color:#fff;font-size:18px">×</button></div><div class="chat-body"><div class="bubble bot">Hi. I can help with services, quotes, pest problems and contact details.</div></div><form class="chat-input"><input placeholder="Ask about a pest problem…" autocomplete="off"><button>Send</button></form></div>
-<a href="https://wa.me/{{ site.whatsapp }}?text=Hello%20INTEX%2C%20I%20need%20help%20with%20pest%20control" class="wa" aria-label="WhatsApp"><span>WA</span><small>Chat on WhatsApp</small></a>
-<footer class="footer"><div class="container footer-grid"><div><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}" style="width:155px"><p>Field-tested pest management for modern homes, businesses and institutions.</p></div><div><strong>Explore</strong><p><a href="/services">Services</a><br><a href="/visit">Visitor check-in</a><br><a href="/contact">Contact</a></p></div><div><strong>Reach us</strong><p>{{ site.phone }}<br>{{ site.email }}<br>{{ site.address }}</p></div><div><strong>Connect</strong><div class="socials"><a class="social" href="#" aria-label="Facebook">f</a><a class="social" href="#" aria-label="Instagram">◎</a><a class="social" href="#" aria-label="LinkedIn">in</a><a class="social" href="https://wa.me/{{ site.whatsapp }}" aria-label="WhatsApp">wa</a></div></div></div><div class="container" style="margin-top:30px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Digital experience by <strong style="color:var(--brand)">Toror Technology Company & Innovations</strong></span></div></footer>
-<button class="chat-trigger" style="position:fixed;right:26px;bottom:87px;z-index:79;border:0;width:42px;height:42px;border-radius:50%;background:#102b25;color:#fff;box-shadow:0 12px 26px rgba(0,0,0,.16)" aria-label="Open assistant">✦</button>
-<script src="/static/js/app.js"></script></body></html>
+
+<div class="assistant" aria-live="polite">
+  <div class="chat-panel" data-chat-panel>
+    <div class="chat-head"><div><span class="assistant-mark">✦</span><div><strong>INTEX Assistant</strong><small>Quick answers · human help when needed</small></div></div><button type="button" class="chat-close" aria-label="Close assistant">×</button></div>
+    <div class="chat-body" data-chat-body><div class="bubble bot">Hi. Tell me the pest problem, your area or what service you’re looking for.</div></div>
+    <form class="chat-form" data-chat-form><input name="message" placeholder="e.g. I have bed bugs in Kilimani" autocomplete="off"><button aria-label="Send message">➜</button></form>
+  </div>
+  <button type="button" class="chat-trigger" aria-label="Open assistant" aria-expanded="false"><span>✦</span></button>
+</div>
+<a href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20need%20help%20with%20pest%20control" class="whatsapp-float" aria-label="Chat on WhatsApp">
+  <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.2A12.7 12.7 0 0 0 5 22.2L3.4 28.5 9.9 27a12.8 12.8 0 1 0 6.1-23.8Zm0 22.9a10.1 10.1 0 0 1-5.1-1.4l-.4-.2-3.9.9 1-3.8-.3-.4A10.1 10.1 0 1 1 16 26.1Zm5.5-7.4c-.3-.2-1.9-.9-2.2-1s-.5-.2-.8.2-.9 1-1.1 1.2-.4.2-.7.1a8.3 8.3 0 0 1-2.4-1.5 9.2 9.2 0 0 1-1.7-2.1c-.2-.3 0-.5.2-.7l.5-.6c.2-.2.2-.4.3-.6s0-.4-.1-.6c-.1-.2-.8-1.8-1.1-2.5-.3-.6-.6-.5-.8-.5h-.7c-.2 0-.6.1-.9.4-.3.3-1.1 1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.1 3.2 5 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.9-.8 2.2-1.6.3-.8.3-1.5.2-1.6-.1-.1-.3-.2-.6-.3Z" fill="currentColor"/></svg>
+  <span class="wa-label">WhatsApp</span>
+</a>
+<footer class="site-footer">
+  <div class="wrap footer-main">
+    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Professional pest management designed around real properties, real people and fast decisions.</p><div class="signature-line"><span>Digital experience engineered by</span><strong>Toror Technology Company & Innovations</strong></div></div>
+    <div><span class="footer-title">Navigate</span><a href="/services">Services</a><a href="/contact">Contact</a><a href="/visit">Visitor QR</a></div>
+    <div><span class="footer-title">Contact</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><a href="mailto:{{ site.email }}">{{ site.email }}</a><span>{{ site.address }}</span></div>
+    <div><span class="footer-title">Connect</span><div class="socials">
+      {% if site.facebook %}<a class="social social-fb" href="{{ site.facebook }}" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24"><path d="M14 8h3V4h-3c-3.3 0-5 1.8-5 5v3H6v4h3v4h4v-4h3.2l.8-4H13V9c0-.7.3-1 1-1Z"/></svg></a>{% endif %}
+      {% if site.instagram %}<a class="social social-ig" href="{{ site.instagram }}" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.7" r="1.1"/></svg></a>{% endif %}
+      {% if site.linkedin %}<a class="social social-in" href="{{ site.linkedin }}" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24"><path d="M5 8.2A2.2 2.2 0 1 1 5 3.8a2.2 2.2 0 0 1 0 4.4ZM3 10h4v11H3V10Zm7 0h3.8v1.5h.1c.5-.9 1.7-1.9 3.7-1.9 4 0 4.8 2.5 4.8 5.8V21h-4v-5c0-1.2 0-2.8-1.8-2.8s-2 1.3-2 2.7V21h-4V10Z"/></svg></a>{% endif %}
+      <a class="social social-wa" href="https://wa.me/{{ site.whatsapp }}" aria-label="WhatsApp"><svg viewBox="0 0 32 32"><path d="M16 3.2A12.7 12.7 0 0 0 5 22.2L3.4 28.5 9.9 27a12.8 12.8 0 1 0 6.1-23.8Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11.6 10.6c.3 0 .6 0 .8.5l1.1 2.5c.1.3.1.5-.1.7l-.8.9c-.2.2-.2.5 0 .8.5.8 1.8 2 3.2 2.6.4.2.7.2.9-.1l.9-1.1c.2-.3.5-.3.8-.2l2.4 1.1c.3.1.5.3.4.6-.2.9-.9 1.7-1.8 1.9-1.7.4-3.8-.4-6.1-2.2-1.9-1.5-3.2-3.4-3.7-5-.5-1.6-.2-2.8.4-3.5.3-.4.9-.5 1.6-.5Z" fill="currentColor"/></svg></a>
+    </div></div>
+  </div>
+  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Built for speed · PWA ready · Search ready</span></div>
+</footer>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script src="/static/js/app.js"></script>
+</body></html>
