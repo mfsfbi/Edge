@@ -84,6 +84,10 @@ def init_db():
         "facebook": "",
         "instagram": "",
         "linkedin": "",
+        "x": "",
+        "rating": "",
+        "years_experience": "",
+        "clients_served": "",
         "map_lat": "-1.2921",
         "map_lng": "36.8219",
         "map_label": "INTEX Pest Limited — Nairobi, Kenya",
@@ -253,7 +257,7 @@ def add_employee():
 
 @app.route("/admin/settings", methods=["POST"])
 def update_settings():
-    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address", "facebook", "instagram", "linkedin", "map_lat", "map_lng", "map_label"]:
+    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address", "facebook", "instagram", "linkedin", "x", "rating", "years_experience", "clients_served", "map_lat", "map_lng", "map_label"]:
         if key in request.form:
             set_setting(key, request.form[key].strip())
     file = request.files.get("logo")

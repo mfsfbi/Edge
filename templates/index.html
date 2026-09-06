@@ -1,36 +1,60 @@
 {% extends 'base.html' %}
-{% block title %}{{ site.company_name }} — Modern Pest Management{% endblock %}
+{% block title %}{{ site.company_name }} — Professional Pest Management Kenya{% endblock %}
 {% block content %}
 <main>
-<section class="hero-v2"><div class="wrap hero-v2-grid">
+<section class="hero-v2 hero-signature"><div class="wrap hero-v2-grid">
   <div class="hero-copy">
     <div class="kicker"><span class="kicker-dot"></span> PEST MANAGEMENT · KENYA</div>
-    <h1>Make the property<br><em>pest-free by design.</em></h1>
-    <p class="hero-lead">{{ site.company_name }} combines field expertise with a faster digital experience—so a visitor, client or manager can understand the next move in seconds.</p>
-    <div class="hero-actions"><a class="btn btn-dark" href="/contact">Book an assessment <span>↗</span></a><a class="btn btn-light" href="/services">See the protection map</a></div>
-    <div class="proof-row"><div><strong>01</strong><span>Inspect</span></div><div><strong>02</strong><span>Target</span></div><div><strong>03</strong><span>Prevent</span></div><div class="proof-tail">Residential · Commercial · Institutional</div></div>
+    <h1>Protect what<br><em>matters most.</em></h1>
+    <p class="hero-lead">Field-tested pest management for modern homes, businesses and institutions—with a clear path from first call to lasting protection.</p>
+    <div class="hero-actions">
+      <a class="btn btn-dark" href="/services"><i data-lucide="shield-check"></i> Explore services <span>↗</span></a>
+      <a class="btn btn-light" href="/visit"><i data-lucide="scan-line"></i> Visitor check-in</a>
+    </div>
+    <div class="proof-row">
+      <div><strong>01</strong><span>Identify</span></div><div><strong>02</strong><span>Treat</span></div><div><strong>03</strong><span>Protect</span></div>
+      <div class="proof-tail">Homes · Businesses · Institutions</div>
+    </div>
   </div>
   <div class="hero-visual">
     <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
-    <div class="hero-core"><div class="core-top"><span>LIVE RESPONSE</span><span class="mini-live">ON</span></div><div class="core-icon"><i data-lucide="shield-check"></i></div><h2>Protection that keeps moving.</h2><p>From first enquiry to field visit, the system is designed to remove friction.</p><div class="signal-grid"><div><span>QR</span><strong>Visitor ready</strong></div><div><span>24/7</span><strong>Digital intake</strong></div><div><span>PWA</span><strong>Mobile first</strong></div></div></div>
+    <div class="hero-core">
+      <div class="core-top"><span>INTEX FIELD NOTE</span><span class="mini-live">READY</span></div>
+      <div class="core-icon"><i data-lucide="bug-off"></i></div>
+      <h2>Control starts with seeing the problem clearly.</h2>
+      <p>Assessment, targeted treatment and prevention brought together in one straightforward experience.</p>
+      <div class="signal-grid">
+        <div><i data-lucide="search-check"></i><span>INSPECT</span><strong>Know the source</strong></div>
+        <div><i data-lucide="spray-can"></i><span>TREAT</span><strong>Target the risk</strong></div>
+        <div><i data-lucide="shield"></i><span>PROTECT</span><strong>Stay ahead</strong></div>
+      </div>
+    </div>
   </div>
 </div></section>
 
-<section class="marquee"><div class="marquee-inner"><span>BED BUGS</span><span>TERMITES</span><span>RODENTS</span><span>MOSQUITOES</span><span>COCKROACHES</span><span>FLIES</span><span>GENERAL PESTS</span></div></section>
+<section class="quote-strip"><div class="wrap quote-strip-in"><div><span class="section-label">READY TO DEAL WITH IT?</span><strong>Need a tailored quote?</strong></div><a class="btn btn-wa" href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20need%20a%20pest%20control%20quote"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.2A12.7 12.7 0 0 0 5 22.2L3.4 28.5 9.9 27a12.8 12.8 0 1 0 6.1-23.8Zm0 22.9a10.1 10.1 0 0 1-5.1-1.4l-.4-.2-3.9.9 1-3.8-.3-.4A10.1 10.1 0 1 1 16 26.1Zm5.5-7.4c-.3-.2-1.9-.9-2.2-1s-.5-.2-.8.2-.9 1-1.1 1.2-.4.2-.7.1a8.3 8.3 0 0 1-2.4-1.5 9.2 9.2 0 0 1-1.7-2.1c-.2-.3 0-.5.2-.7l.5-.6c.2-.2.2-.4.3-.6s0-.4-.1-.6c-.1-.2-.8-1.8-1.1-2.5-.3-.6-.6-.5-.8-.5h-.7c-.2 0-.6.1-.9.4-.3.3-1.1 1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.1 3.2 5 4.4.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.9-.8 2.2-1.6.3-.8.3-1.5.2-1.6-.1-.1-.3-.2-.6-.3Z" fill="currentColor"/></svg> WhatsApp us now <span>→</span></a></div></section>
 
-<section class="section-v2"><div class="wrap"><div class="section-intro"><div><span class="section-label">01 / THE WORK</span><h2>Serious protection.<br><em>Easy to understand.</em></h2></div><p>We took the strongest parts of a traditional pest-control website—services, expertise, trust—and removed the clutter around them.</p></div>
-<div class="service-grid-v2">
-<article><div class="service-num">01</div><i data-lucide="bed-double"></i><h3>Bed bug control</h3><p>Inspection-led treatment for homes, rentals, hospitality and high-contact spaces.</p><a href="/services">Explore treatment ↗</a></article>
-<article><div class="service-num">02</div><i data-lucide="home"></i><h3>Termite protection</h3><p>Spot the pressure early and protect the property before damage becomes expensive.</p><a href="/services">Explore protection ↗</a></article>
-<article><div class="service-num">03</div><i data-lucide="mouse-pointer-2"></i><h3>Rodent & general pests</h3><p>Targeted control for rodents, cockroaches, mosquitoes, flies and recurring infestations.</p><a href="/services">Explore control ↗</a></article>
+<section class="section-v2"><div class="wrap"><div class="section-intro"><div><span class="section-label">01 / PEST WATCH</span><h2>See the pest.<br><em>Understand the risk.</em></h2></div><p>Real pest problems deserve more than stock icons. Start with the pest you are seeing, then move into the right treatment path.</p></div>
+<div class="service-grid-v2 visual-service-grid">
+<article class="service-visual-card"><div class="visual-frame"><img src="/static/uploads/bedbug.png" alt="Bed bug close-up"><span class="service-tag">B</span></div><div class="service-content"><div class="service-meta"><span>BED BUGS</span><i data-lucide="info"></i></div><h3>Bed bug control</h3><p>Focused treatment plans for stubborn bed bug infestations in homes, rentals and hospitality spaces.</p><a href="/services">View treatment ↗</a></div></article>
+<article class="service-visual-card"><div class="visual-frame"><img src="/static/uploads/termites.png" alt="Termites on wood"><span class="service-tag">T</span></div><div class="service-content"><div class="service-meta"><span>TERMITES</span><i data-lucide="info"></i></div><h3>Termite protection</h3><p>Inspection-led termite control where early detection and property protection matter most.</p><a href="/services">View protection ↗</a></div></article>
+<article class="service-visual-card"><div class="visual-frame"><img src="/static/uploads/rodents.png" alt="Rat and cockroach"><span class="service-tag">R</span></div><div class="service-content"><div class="service-meta"><span>RODENTS + GENERAL</span><i data-lucide="info"></i></div><h3>Rodents & general pests</h3><p>Targeted control for rats, cockroaches, mosquitoes, flies and recurring pest activity.</p><a href="/services">View control ↗</a></div></article>
 </div></div></section>
 
-<section class="section-v2 dark-section"><div class="wrap split-v2"><div><span class="section-label light">02 / THE INTELLIGENCE</span><h2>Not just a website.<br><em>A digital operating layer.</em></h2><p>Visitors can check in with QR. Management can see finance and people at a glance. Employees get a focused work surface. The public site stays clean.</p><div class="chip-row"><span>QR visitor flow</span><span>Finance overview</span><span>Employee workspace</span><span>Brand controls</span><span>Backup ready</span></div></div><div class="command-card"><div class="command-head"><span>BUSINESS PULSE</span><span>THIS WEEK</span></div><div class="command-kpi"><span>Response pipeline</span><strong>Clear</strong></div><div class="command-bars"><i style="height:38%"></i><i style="height:62%"></i><i style="height:47%"></i><i style="height:78%"></i><i style="height:58%"></i><i style="height:86%"></i><i style="height:70%"></i></div><div class="command-foot"><span>Simple glance</span><strong>Then drill down</strong></div></div></div></section>
+<section class="section-v2 signal-section"><div class="wrap"><div class="signal-heading"><div><span class="section-label">02 / THE DIFFERENCE</span><h2>Details that help<br><em>the right decision happen faster.</em></h2></div><span class="info-orb" title="Useful detail"><i data-lucide="info"></i></span></div>
+<div class="signal-cards"><div><i data-lucide="clipboard-check"></i><strong>Assessment first</strong><span>Start with the situation—not a generic package.</span></div><div><i data-lucide="target"></i><strong>Targeted treatment</strong><span>Match action to the pest and the property.</span></div><div><i data-lucide="calendar-check-2"></i><strong>Follow-through</strong><span>Keep prevention in view after the immediate fix.</span></div><div><i data-lucide="building-2"></i><strong>Built for every space</strong><span>Homes, offices, hospitality and institutions.</span></div><div><i data-lucide="smartphone"></i><strong>Fast from the phone</strong><span>Quote, contact, check-in and directions stay close.</span></div></div></div></section>
 
-<section class="section-v2"><div class="wrap location-grid"><div class="map-card"><div class="map-overlay"><div><span class="section-label">03 / FIND US</span><h3>{{ site.address }}</h3></div><a class="map-dir" href="https://www.google.com/maps/search/?api=1&query={{ site.map_lat }},{{ site.map_lng }}" target="_blank" rel="noopener">Directions ↗</a></div><div id="intex-map" data-lat="{{ site.map_lat }}" data-lng="{{ site.map_lng }}" data-label="{{ site.map_label }}"></div></div><div class="location-copy"><span class="section-label">LOCAL, BUT BUILT TO SCALE</span><h2>One screen should tell you where we are, what we do and what to do next.</h2><p>{{ site.company_name }} is designed to feel local and current—not like a brochure frozen in another era.</p><a class="btn btn-dark" href="/contact">Talk to the team ↗</a></div></div></section>
+<section class="section-v2 trust-section"><div class="wrap trust-grid"><div><span class="section-label">03 / AT A GLANCE</span><h2>A service page should leave you with <em>something useful.</em></h2><p>Choose a service, find the team, check in or start a conversation without hunting through the page.</p></div><div class="trust-metrics">
+{% if site.rating %}<div><strong>{{ site.rating }}</strong><span>Client rating</span></div>{% endif %}
+{% if site.years_experience %}<div><strong>{{ site.years_experience }}</strong><span>Years in service</span></div>{% endif %}
+{% if site.clients_served %}<div><strong>{{ site.clients_served }}</strong><span>Clients served</span></div>{% endif %}
+<div><i data-lucide="map-pin"></i><strong>{{ site.address }}</strong><span>Current base</span></div>
+</div></div></section>
 
-<section class="section-v2 proof-section"><div class="wrap proof-grid-v2"><div class="proof-card"><span class="section-label">VISITOR QR</span><h3>Walk in.<br>Scan. Done.</h3><p>Reception can use a single QR to capture purpose, contact details and visit time.</p><a href="/visit">Open visitor experience ↗</a></div><div class="proof-card accent-card"><span class="section-label">MANAGEMENT</span><h3>Numbers without noise.</h3><p>Income, expenses, people, visitors and the brand can live behind one calm command centre.</p><a href="/admin">Open management ↗</a></div><div class="proof-card"><span class="section-label">FIELD TEAM</span><h3>Work surface.<br>Not bureaucracy.</h3><p>Employees see tasks, owners and what is next without navigating the entire business.</p><a href="/employees">Open employees ↗</a></div></div></section>
+<section class="section-v2 location-section"><div class="wrap location-grid"><div class="map-card"><div class="map-overlay"><div><span class="section-label">04 / FIND US</span><h3>{{ site.map_label }}</h3></div><a class="map-dir" href="https://www.google.com/maps/search/?api=1&query={{ site.map_lat }},{{ site.map_lng }}" target="_blank" rel="noopener"><i data-lucide="navigation"></i> Directions</a></div><div id="intex-map" data-lat="{{ site.map_lat }}" data-lng="{{ site.map_lng }}" data-label="{{ site.map_label }}"></div></div><div class="location-copy"><span class="section-label">LOCAL PRESENCE</span><h2>Know where to reach us before you arrive.</h2><p>{{ site.address }}. Use the map for the current office position or open directions directly.</p><div class="quick-contact"><a href="tel:{{ site.phone }}"><i data-lucide="phone"></i><span>{{ site.phone }}</span></a><a href="mailto:{{ site.email }}"><i data-lucide="mail"></i><span>{{ site.email }}</span></a></div><a class="btn btn-dark" href="/contact">Contact INTEX ↗</a></div></div></section>
 
-<section class="closing-cta"><div class="wrap"><div><span class="section-label light">READY WHEN YOU ARE</span><h2>Show the client<br>what 2026 looks like.</h2></div><a href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20want%20to%20discuss%20pest%20control" class="btn btn-white">Start on WhatsApp ↗</a></div></section>
+<section class="section-v2 visit-spotlight"><div class="wrap visit-grid"><div class="visit-copy"><span class="section-label">05 / ARRIVAL</span><h2>A better way to <em>check in.</em></h2><p>Scan the visitor QR before entering reception and send the visit details straight into the management record.</p><a class="btn btn-dark" href="/visit"><i data-lucide="qr-code"></i> Open visitor check-in</a></div><div class="visit-card"><div class="qr-art"><i data-lucide="scan-qr-code"></i></div><div><span>VISITOR QR</span><strong>Ready at the front door.</strong><p>One scan. Purpose, contact and arrival time captured.</p></div></div></div></section>
+
+<section class="closing-cta"><div class="wrap closing-grid"><div><span class="section-label light">LET'S GET TO WORK</span><h2>Tell us what<br>you’re dealing with.</h2></div><div class="closing-actions"><a class="btn btn-wa" href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20need%20pest%20control%20assistance"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.2A12.7 12.7 0 0 0 5 22.2L3.4 28.5 9.9 27a12.8 12.8 0 1 0 6.1-23.8Zm0 22.9a10.1 10.1 0 0 1-5.1-1.4l-.4-.2-3.9.9 1-3.8-.3-.4A10.1 10.1 0 1 1 16 26.1Zm5.5-7.4c-.3-.2-1.9-.9-2.2-1s-.5-.2-.8.2-.9 1-1.1 1.2-.4.2-.7.1a8.3 8.3 0 0 1-2.4-1.5 9.2 9.2 0 0 1-1.7-2.1c-.2-.3 0-.5.2-.7l.5-.6c.2-.2.2-.4.3-.6s0-.4-.1-.6c-.1-.2-.8-1.8-1.1-2.5-.3-.6-.6-.5-.8-.5h-.7c-.2 0-.6.1-.9.4-.3.3-1.1 1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.1 3.2 5 4.4.7.3 1.3.5 1.7.6.7.2 1.9-.8 2.2-1.6.3-.8.3-1.5.2-1.6-.1-.1-.3-.2-.6-.3Z" fill="currentColor"/></svg> WhatsApp us now <span>→</span></a><a class="text-link light-link" href="/contact">View all contact options ↗</a></div></div></section>
 </main>
 {% endblock %}
