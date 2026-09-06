@@ -209,6 +209,21 @@ def api_site():
     return jsonify(settings())
 
 
+@app.route("/visitor-qr.png")
+def visitor_qr():
+    """Generate the public visitor QR from the current host so deployments never use a stale code."""
+    from io import BytesIO
+    qr_url = url_for("visit", _external=True)
+    img = qrcode.make(qr_url)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    from flask import send_file
+    response = send_file(buf, mimetype="image/png", download_name="intex-visitor-qr.png")
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
 @app.route("/admin")
 def admin():
     con = db()
@@ -222,13 +237,9 @@ def admin():
     visitor_count = con.execute("SELECT COUNT(*) c FROM visitors").fetchone()["c"]
     con.close()
     profit = totals["income"] - totals["expense"]
-    qr_url = url_for("visit", _external=True)
-    qr_path = UPLOAD_DIR / "visitor-qr.png"
-    img = qrcode.make(qr_url)
-    img.save(qr_path)
     return render_template("admin.html", visitors=visitors, transactions=transactions, employees=employees,
                            income=totals["income"], expense=totals["expense"], profit=profit,
-                           visitor_count=visitor_count, qr_url=qr_url)
+                           visitor_count=visitor_count)
 
 
 @app.route("/admin/transaction", methods=["POST"])
@@ -282,7 +293,24 @@ def employees():
     team = con.execute("SELECT * FROM employees ORDER BY name").fetchall()
     tasks = con.execute("SELECT * FROM tasks ORDER BY id DESC LIMIT 12").fetchall()
     con.close()
-    return render_template("employees.html", team=team, tasks=tasks)
+    descriptions = {
+        "Operations": "Coordinates field work, scheduling and site follow-through.",
+        "Customer Care": "Handles client communication, enquiries and follow-up.",
+        "Pest Management": "Carries out inspections, treatment and field reporting.",
+    }
+    roles = []
+    seen = set()
+    for e in team:
+        role = e["role"] or "Team"
+        if role not in seen:
+            roles.append({"role": role, "description": descriptions.get(role, "Complete assigned field duties and report work clearly.")})
+            seen.add(role)
+    return render_template("employees.html", team=team, tasks=tasks, responsibilities=roles)
+
+
+@app.route("/employees/scan")
+def employee_scan():
+    return render_template("employee_scan.html")
 
 
 @app.route("/employee/task", methods=["POST"])
@@ -333,7 +361,9 @@ def sitemap():
 
 @app.route("/sw.js")
 def sw():
-    return send_from_directory(BASE_DIR / "static", "sw.js", mimetype="application/javascript")
+    response = send_from_directory(BASE_DIR / "static", "sw.js", mimetype="application/javascript")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 
 init_db()
