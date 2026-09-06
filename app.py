@@ -83,6 +83,7 @@ def init_db():
         "primary_color": "#741b3d",
         "facebook": "",
         "instagram": "",
+        "tiktok": "",
         "linkedin": "",
         "x": "",
         "rating": "",
@@ -268,7 +269,7 @@ def add_employee():
 
 @app.route("/admin/settings", methods=["POST"])
 def update_settings():
-    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address", "facebook", "instagram", "linkedin", "x", "rating", "years_experience", "clients_served", "map_lat", "map_lng", "map_label"]:
+    for key in ["company_name", "tagline", "phone", "whatsapp", "email", "domain", "address", "facebook", "instagram", "tiktok", "linkedin", "x", "rating", "years_experience", "clients_served", "map_lat", "map_lng", "map_label"]:
         if key in request.form:
             set_setting(key, request.form[key].strip())
     file = request.files.get("logo")

@@ -164,3 +164,64 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 @media(max-width:930px){.hero-pest-board{min-height:420px}.qr-section-grid{grid-template-columns:1fr 240px}.role-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:680px){.hero-pest-board{min-height:330px;grid-template-columns:1.4fr .8fr;gap:9px}.hero-pest-board{margin-top:10px}.hero-pest-main,.hero-pest-small{border-radius:22px}.hero-pest-board span{left:9px;bottom:9px;padding:5px 7px;font-size:7px}.qr-section-grid{grid-template-columns:1fr}.public-qr-card{max-width:280px}.private-heading{align-items:flex-start;flex-direction:column}.role-grid{grid-template-columns:1fr}.closing-actions{width:100%}.closing-actions .btn{width:100%}}
 @media(max-width:430px){.hero-pest-board{min-height:300px}.hero-pest-small{display:block}.hero-pest-board{grid-template-columns:1.35fr .7fr}.qr-section{padding-top:60px;padding-bottom:60px}}
+
+/* INTEX 2026 final public chrome refinement */
+:root{--spu-maroon:#741b3d;--spu-maroon-dark:#5c1530;--spu-gold:#c8a04b}
+
+/* The entire public header is one continuous maroon frame. */
+.public-chrome.utility,
+.public-chrome.site-nav{background:var(--spu-maroon)!important;color:#fff!important;backdrop-filter:none;border:0}
+.public-chrome.utility{border-bottom:1px solid rgba(255,255,255,.10)}
+.public-chrome .utility-left,.public-chrome .utility-right{color:#f7e9ee}
+.public-chrome .utility-right a{color:#fff!important}
+.public-chrome.site-nav{box-shadow:0 10px 30px rgba(42,8,22,.10)}
+.public-chrome .brand img{display:block}
+.public-chrome .nav-links{display:none!important}
+.public-chrome .menu-btn{display:grid!important;place-items:center;width:44px;height:44px;margin-left:auto;border:1px solid rgba(255,255,255,.28);border-radius:12px;background:#101114;color:#fff;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.16)}
+.public-chrome .menu-btn:hover{background:#000}
+.public-chrome .menu-btn svg{width:21px;height:21px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Public drawer: navigation is independent from the shortcuts at the bottom. */
+.mobile-drawer{top:114px!important;max-width:430px;margin-left:auto;margin-right:auto;left:4vw;right:4vw}
+.mobile-drawer a{border:1px solid rgba(255,255,255,.08);margin:2px 0}
+.mobile-drawer a:nth-of-type(6){margin-top:9px;border-color:rgba(255,255,255,.22)}
+
+/* Prestige opening: let the brand breathe before imagery enters the story. */
+.hero-signature{padding-top:112px;padding-bottom:100px;background:linear-gradient(180deg,#f7f4f4 0%,#f6f8f9 78%,var(--paper) 100%)}
+.hero-v2-grid{gap:64px}
+.hero-copy{padding-top:18px}
+.hero-visual{padding-top:46px;align-self:start}
+.hero-pest-board{transform:translateY(34px)}
+.hero-pest-rodent{transform:translateY(42px)}
+.hero-pest-termite{transform:translateY(12px)}
+.hero-copy h1{max-width:690px}
+
+/* Keep the closing action useful without making another heavy maroon panel. */
+.closing-cta{background:#f4f6f7!important}
+.closing-cta .btn-wa{background:#25d366!important;color:#fff!important;border-color:#25d366!important}
+
+/* Five social slots: icons remain visible; only configured links are active. */
+.site-footer .social{display:grid;place-items:center;width:40px;height:40px;border-radius:12px}
+.site-footer .social svg{width:19px;height:19px}
+.site-footer .social-tt{color:#fff}
+.site-footer .social-empty{opacity:.42;cursor:default}
+.footer-shortcuts{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.footer-shortcuts a{font-weight:800;color:#d8b6c2!important}
+.footer-shortcuts a:hover{color:#fff!important}
+
+/* No white-on-white public utility text. */
+.public-chrome + .mobile-drawer{color:#fff}
+.public-chrome + .mobile-drawer svg{color:#f6dce5}
+
+@media(max-width:680px){
+  .public-chrome .menu-btn{width:42px;height:42px}
+  .hero-signature{padding-top:82px;padding-bottom:76px}
+  .hero-v2-grid{gap:34px}
+  .hero-copy{padding-top:0}
+  .hero-visual{padding-top:24px}
+  .hero-pest-board{transform:none}
+  .hero-pest-rodent{transform:translateY(20px)}
+  .footer-shortcuts{justify-content:flex-start}
+}
+.field-help{display:block;color:#7f8d98;font-size:10px;line-height:1.5;margin-top:-4px}
