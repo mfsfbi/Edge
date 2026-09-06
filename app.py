@@ -69,6 +69,34 @@ def init_db():
             due_date TEXT,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS production_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_no TEXT NOT NULL,
+            product TEXT NOT NULL,
+            stage TEXT NOT NULL DEFAULT 'Preparation',
+            status TEXT NOT NULL DEFAULT 'Open',
+            operator TEXT,
+            started_at TEXT NOT NULL,
+            notes TEXT
+        );
+        CREATE TABLE IF NOT EXISTS material_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_no TEXT NOT NULL,
+            material_name TEXT NOT NULL,
+            quantity TEXT NOT NULL,
+            unit TEXT NOT NULL,
+            remaining TEXT,
+            recorded_by TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS formulations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product TEXT NOT NULL,
+            version TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Approved',
+            controlled_reference TEXT,
+            last_reviewed TEXT
+        );
         """
     )
     defaults = {
@@ -102,6 +130,14 @@ def init_db():
                 ("Field Team Lead", "Operations", "Active", "0700000000", datetime.utcnow().isoformat()),
                 ("Client Service Desk", "Customer Care", "Active", "0711111111", datetime.utcnow().isoformat()),
                 ("Technical Officer", "Pharmaceutical Operations", "Active", "0722222222", datetime.utcnow().isoformat()),
+            ],
+        )
+    if con.execute("SELECT COUNT(*) FROM formulations").fetchone()[0] == 0:
+        con.executemany(
+            "INSERT INTO formulations(product,version,status,controlled_reference,last_reviewed) VALUES (?,?,?,?,?)",
+            [
+                ("Product Alpha", "v1.0", "Approved", "Master Formula / Controlled Copy", date.today().isoformat()),
+                ("Product Beta", "v2.1", "Approved", "Master Formula / Controlled Copy", date.today().isoformat()),
             ],
         )
     con.commit()
@@ -236,16 +272,19 @@ def admin():
     visitors = con.execute("SELECT * FROM visitors ORDER BY id DESC LIMIT 8").fetchall()
     transactions = con.execute("SELECT * FROM transactions ORDER BY id DESC LIMIT 8").fetchall()
     employees = con.execute("SELECT * FROM employees ORDER BY id DESC").fetchall()
+    batches = con.execute("SELECT * FROM production_batches ORDER BY id DESC LIMIT 8").fetchall()
+    usage = con.execute("SELECT * FROM material_usage ORDER BY id DESC LIMIT 10").fetchall()
     totals = con.execute(
         "SELECT COALESCE(SUM(CASE WHEN kind='income' THEN amount ELSE 0 END),0) income, "
         "COALESCE(SUM(CASE WHEN kind='expense' THEN amount ELSE 0 END),0) expense FROM transactions"
     ).fetchone()
     visitor_count = con.execute("SELECT COUNT(*) c FROM visitors").fetchone()["c"]
+    active_batches = con.execute("SELECT COUNT(*) c FROM production_batches WHERE status IN ('Open','In progress')").fetchone()["c"]
     con.close()
     profit = totals["income"] - totals["expense"]
     return render_template("admin.html", visitors=visitors, transactions=transactions, employees=employees,
-                           income=totals["income"], expense=totals["expense"], profit=profit,
-                           visitor_count=visitor_count)
+                           batches=batches, usage=usage, income=totals["income"], expense=totals["expense"], profit=profit,
+                           visitor_count=visitor_count, active_batches=active_batches)
 
 
 @app.route("/admin/transaction", methods=["POST"])
@@ -298,20 +337,47 @@ def employees():
     con = db()
     team = con.execute("SELECT * FROM employees ORDER BY name").fetchall()
     tasks = con.execute("SELECT * FROM tasks ORDER BY id DESC LIMIT 12").fetchall()
+    formulations = con.execute("SELECT * FROM formulations ORDER BY product").fetchall()
+    batches = con.execute("SELECT * FROM production_batches ORDER BY id DESC LIMIT 12").fetchall()
+    usage = con.execute("SELECT * FROM material_usage ORDER BY id DESC LIMIT 14").fetchall()
     con.close()
     descriptions = {
-        "Operations": "Coordinates field work, scheduling and site follow-through.",
+        "Operations": "Coordinates work allocation, scheduling and site follow-through.",
         "Customer Care": "Handles client communication, enquiries and follow-up.",
-        "Pharmaceutical Operations": "Supports formulation, production, laboratory coordination and controlled operational records.",
+        "Pharmaceutical Operations": "Works from controlled technical documents, records production activity and escalates quality or safety issues.",
     }
     roles = []
     seen = set()
     for e in team:
         role = e["role"] or "Team"
         if role not in seen:
-            roles.append({"role": role, "description": descriptions.get(role, "Complete assigned field duties and report work clearly.")})
+            roles.append({"role": role, "description": descriptions.get(role, "Complete assigned duties and record work clearly.")})
             seen.add(role)
-    return render_template("employees.html", team=team, tasks=tasks, responsibilities=roles)
+    return render_template("employees.html", team=team, tasks=tasks, formulations=formulations, batches=batches, usage=usage, responsibilities=roles)
+
+
+@app.route("/employee/batch", methods=["POST"])
+def add_batch():
+    con = db()
+    con.execute("INSERT INTO production_batches(batch_no,product,stage,status,operator,started_at,notes) VALUES(?,?,?,?,?,?,?)", (
+        request.form.get("batch_no", "BATCH-NEW"), request.form.get("product", "Unspecified product"),
+        request.form.get("stage", "Preparation"), request.form.get("status", "Open"),
+        request.form.get("operator", "Team"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), request.form.get("notes", "")
+    ))
+    con.commit(); con.close()
+    return redirect(url_for("employees") + "#production")
+
+
+@app.route("/employee/material", methods=["POST"])
+def add_material_usage():
+    con = db()
+    con.execute("INSERT INTO material_usage(batch_no,material_name,quantity,unit,remaining,recorded_by,created_at) VALUES(?,?,?,?,?,?,?)", (
+        request.form.get("batch_no", ""), request.form.get("material_name", ""), request.form.get("quantity", ""),
+        request.form.get("unit", ""), request.form.get("remaining", ""), request.form.get("recorded_by", ""),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+    con.commit(); con.close()
+    return redirect(url_for("employees") + "#materials")
 
 
 @app.route("/employees/scan")
