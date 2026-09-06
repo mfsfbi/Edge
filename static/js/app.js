@@ -23,3 +23,23 @@ const revealItems=qsa('.service-grid-v2 article,.pharma-card,.timeline-card,.pro
 if('IntersectionObserver' in window){const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('is-visible');io.unobserve(e.target);}}),{threshold:.08});revealItems.forEach(e=>{e.classList.add('reveal');io.observe(e);});}
 const shareQr=qs('[data-share-qr]');
 if(shareQr){shareQr.addEventListener('click',async()=>{const data={title:'INTEX Visitor Check-in',text:'Facility visitor check-in',url:new URL('/visit',location.origin).href};try{if(navigator.share){await navigator.share(data);}else if(navigator.clipboard){await navigator.clipboard.writeText(data.url);shareQr.innerHTML='<i data-lucide="check"></i> Link copied';if(window.lucide)window.lucide.createIcons();}}catch(e){}});}
+
+// INTEX activity-zone navigation: switches panels without browser hash jumps.
+const zoneLinks=qsa('.zone-link[data-zone]');
+const zonePanels=qsa('.zone-panel[data-panel]');
+const openZone=(zone, updateUrl=true)=>{
+  if(!zonePanels.length)return;
+  const target=zonePanels.some(p=>p.dataset.panel===zone)?zone:'overview';
+  zonePanels.forEach(p=>p.classList.toggle('active',p.dataset.panel===target));
+  zoneLinks.forEach(b=>b.classList.toggle('active',b.dataset.zone===target));
+  if(updateUrl){
+    const u=new URL(location.href); u.searchParams.set('zone',target); history.replaceState(null,'',u.pathname+'?'+u.searchParams.toString());
+  }
+};
+zoneLinks.forEach(b=>b.addEventListener('click',()=>openZone(b.dataset.zone)));
+qsa('[data-zone-open]').forEach(b=>b.addEventListener('click',()=>openZone(b.dataset.zoneOpen)));
+if(zonePanels.length){const initial=new URLSearchParams(location.search).get('zone');openZone(initial||'overview',false);}
+qsa('.reference-pill[data-product]').forEach(btn=>btn.addEventListener('click',()=>{
+  const input=qs('input[name="product"]',btn.closest('.workspace-card'));
+  if(input){input.value=btn.dataset.product;input.focus();}
+}));

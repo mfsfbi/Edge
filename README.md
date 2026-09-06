@@ -1,22 +1,35 @@
-# INTEX — Pharmaceutical Public Site
+# INTEX — Client + Private Operations Build
 
-This build keeps the existing INTEX visual identity and compact maroon navigation while refocusing the public experience on pharmaceutical and chemical-formulation operations.
+This build separates the experience into three clear layers.
 
-## Public experience
-- Pharmaceutical formulation and controlled mixing
-- Laboratory and sample workflow
-- Production and batch operations
-- Quality assurance / quality control
-- Product catalogue structure
-- Research & development
-- Materials and inventory
-- Process overview
-- Technical / commercial contact
-- Facility visitor check-in
+## 1. Public client website
+The public homepage is deliberately short and visual. It gives visitors a welcoming company introduction, real-world pest imagery, brief service cues, contact options, WhatsApp and a location map.
 
-## Safety boundary
-The site records and presents approved operational concepts; it does not invent chemical recipes, dosages, process parameters or hazardous mixing instructions. Company-authorized technical documentation remains the source of truth for those details.
+The public menu is a compact drawer with four friendly dropdown groups: Company, Services, Products & Solutions, and Connect. Deeper information lives on dedicated pages instead of making the homepage a long scroll.
 
-Public visuals use a mix of original UI artwork and a rodent/research image carried over for research-oriented visitor imagery. Replace it with the company's own licensed facility/product photography before production launch.
+## 2. Employee workspace
+Employees get activity zones rather than one long dashboard. They can open Batch Work, Materials, QC Handover, Tasks and Team independently. Selecting an approved product reference can populate the batch product field, while the controlled guide reminds the operator to follow the organization's approved technical documentation.
 
-Important: the employee interface is designed to consume organization-approved master formulas/SOPs rather than invent technical recipes. Management receives operational summaries such as batch activity and recorded material movement; the public site deliberately stays high-level and visual.
+The application records actual workplace entries such as batch identity, material usage and remaining stock. It does not invent recipes, dosages, process parameters or hazardous mixing instructions.
+
+## 3. Management workspace
+Management sees refined summaries: production status, material movement, finance, staff, visitors, enquiries, reviews and public-site controls. The management view deliberately does not expose the practical step-by-step technical workbench.
+
+## UX changes in this revision
+- Deep green top and bottom bars, with maroon retained as an interior accent.
+- Light sky-blue visible menu button with a gear/tooth-like mark.
+- Visitor menu is scrollable on phones.
+- Dropdown navigation instead of a long visitor menu.
+- Homepage shortened to visual welcome content, contact and location.
+- Actual pest imagery restored for visitor-facing visual storytelling.
+- Employee and management pages use activity-zone buttons to avoid long sparse screens.
+- Form submissions preserve the current activity zone without violent browser/hash jumps.
+- Customer reviews, comments and enquiry details remain available to management.
+- Social links open configured external profiles rather than page anchors.
+- Five ready-to-use INTEX SVG logo concepts are included in the management Logo Studio, with download buttons and one-click selection.
+
+## Location
+The default public location label is set to Donholm, Nairobi, Kenya as requested and remains editable in Management > Public site. Verify the exact address and map coordinates before launch.
+
+## Assets
+Visitor pest images from the earlier INTEX build have been restored alongside the existing pharmaceutical/product artwork. Replace them with company-owned or properly licensed photography before commercial launch when appropriate.

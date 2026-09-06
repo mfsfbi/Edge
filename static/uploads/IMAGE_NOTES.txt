@@ -1,0 +1,5 @@
+INTEX visitor imagery notes
+
+The bedbug.png, termites.png and rodents.png files were restored from the earlier INTEX project build so the public website could keep its requested real-world pest visual language.
+
+Before commercial launch, confirm that all third-party imagery used by the company is owned, licensed, or otherwise cleared for the intended use.

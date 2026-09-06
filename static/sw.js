@@ -1,4 +1,4 @@
-const CACHE='intex-pharma-v6';
+const CACHE='intex-visitor-v8';
 const STATIC_ASSETS=['/static/css/app.css','/static/js/app.js','/static/uploads/logo.svg'];
 
 self.addEventListener('install', event=>{

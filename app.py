@@ -123,7 +123,7 @@ def init_db():
         "whatsapp": "254702717779",
         "email": "hello@intex.co.ke",
         "domain": "https://www.intex.co.ke",
-        "address": "Nairobi, Kenya",
+        "address": "Donholm, Nairobi, Kenya",
         "logo": "logo.svg",
         "primary_color": "#741b3d",
         "facebook": "",
@@ -136,7 +136,7 @@ def init_db():
         "clients_served": "",
         "map_lat": "-1.2921",
         "map_lng": "36.8219",
-        "map_label": "INTEX — Nairobi, Kenya",
+        "map_label": "INTEX — Donholm, Nairobi, Kenya",
     }
     for key, value in defaults.items():
         con.execute("INSERT OR IGNORE INTO settings(key,value) VALUES (?,?)", (key, value))
@@ -219,6 +219,26 @@ def services():
     return render_template("services.html")
 
 
+@app.route("/quality")
+def quality():
+    return render_template("quality.html")
+
+
+@app.route("/products")
+def products():
+    return render_template("products.html")
+
+
+@app.route("/gallery")
+def gallery():
+    return render_template("gallery.html")
+
+
+@app.route("/reviews")
+def reviews_page():
+    return render_template("reviews.html")
+
+
 @app.route("/contact", methods=["GET", "POST"])
 def contact():
     if request.method == "POST":
@@ -254,7 +274,7 @@ def review():
             (name, rating, comment, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
         con.commit(); con.close()
-    return redirect(url_for("home") + "#reviews")
+    return redirect(url_for("reviews_page"))
 
 
 @app.route("/visit", methods=["GET", "POST"])
@@ -359,11 +379,18 @@ def admin():
     active_batches = con.execute("SELECT COUNT(*) c FROM production_batches WHERE status IN ('Open','In progress')").fetchone()["c"]
     con.close()
     profit = totals["income"] - totals["expense"]
+    logo_options = [
+        {"file": "logo-options/intex-crest.svg", "name": "Crest", "note": "Strong green company mark with a light-blue technical accent."},
+        {"file": "logo-options/intex-capsule.svg", "name": "Capsule", "note": "Clean pharmaceutical-style wordmark."},
+        {"file": "logo-options/intex-leaf.svg", "name": "Leaf", "note": "Softer professional mark for a modern public identity."},
+        {"file": "logo-options/intex-shield.svg", "name": "Shield", "note": "Quality and protection emphasis."},
+        {"file": "logo-options/intex-mark.svg", "name": "Mark", "note": "Compact geometric mark for app and dashboard use."},
+    ]
     return render_template("admin.html", visitors=visitors, transactions=transactions, employees=employees,
                            batches=batches, usage=usage, enquiries=enquiries, reviews_admin=reviews_admin,
                            review_average=float(review_summary["average"] or 0), review_count=int(review_summary["count"] or 0),
                            income=totals["income"], expense=totals["expense"], profit=profit,
-                           visitor_count=visitor_count, active_batches=active_batches)
+                           visitor_count=visitor_count, active_batches=active_batches, logo_options=logo_options)
 
 
 @app.route("/admin/transaction", methods=["POST"])
@@ -375,7 +402,7 @@ def add_transaction():
         request.form.get("note", ""), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     con.commit(); con.close()
-    return redirect(url_for("admin") + "#finance")
+    return redirect(url_for("admin") + "?zone=" + (request.form.get("return_zone") or "finance"))
 
 
 @app.route("/admin/employee", methods=["POST"])
@@ -387,7 +414,7 @@ def add_employee():
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     con.commit(); con.close()
-    return redirect(url_for("admin") + "#people")
+    return redirect(url_for("admin") + "?zone=" + (request.form.get("return_zone") or "people"))
 
 
 @app.route("/admin/settings", methods=["POST"])
@@ -402,7 +429,23 @@ def update_settings():
             filename = secure_filename(f"brand-logo.{ext}")
             file.save(UPLOAD_DIR / filename)
             set_setting("logo", filename)
-    return redirect(url_for("admin") + "#settings")
+    return redirect(url_for("admin") + "?zone=" + (request.form.get("return_zone") or "public"))
+
+
+@app.route("/admin/logo/select", methods=["POST"])
+def select_logo():
+    filename = (request.form.get("filename") or "").strip()
+    allowed = {
+        "logo-options/intex-crest.svg",
+        "logo-options/intex-capsule.svg",
+        "logo-options/intex-leaf.svg",
+        "logo-options/intex-shield.svg",
+        "logo-options/intex-mark.svg",
+    }
+    if filename in allowed:
+        set_setting("logo", filename)
+    zone = request.form.get("return_zone") or "logos"
+    return redirect(url_for("admin") + "?zone=" + zone)
 
 
 @app.route("/admin/backup")
@@ -444,7 +487,7 @@ def add_batch():
         request.form.get("operator", "Team"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), request.form.get("notes", "")
     ))
     con.commit(); con.close()
-    return redirect(url_for("employees") + "#production")
+    return redirect(url_for("employees") + "?zone=" + (request.form.get("return_zone") or "batch"))
 
 
 @app.route("/employee/material", methods=["POST"])
@@ -456,7 +499,7 @@ def add_material_usage():
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     con.commit(); con.close()
-    return redirect(url_for("employees") + "#materials")
+    return redirect(url_for("employees") + "?zone=" + (request.form.get("return_zone") or "materials"))
 
 
 @app.route("/employees/scan")
@@ -473,7 +516,7 @@ def add_task():
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
     con.commit(); con.close()
-    return redirect(url_for("employees"))
+    return redirect(url_for("employees") + "?zone=" + (request.form.get("return_zone") or "tasks"))
 
 
 @app.route("/logo/<path:filename>")
@@ -502,7 +545,7 @@ def robots():
 @app.route("/sitemap.xml")
 def sitemap():
     base = request.url_root.rstrip("/")
-    urls = ["/", "/services", "/contact", "/visit"]
+    urls = ["/", "/services", "/quality", "/products", "/gallery", "/reviews", "/contact", "/visit"]
     xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for u in urls:
         xml.append(f"<url><loc>{base}{u}</loc></url>")
