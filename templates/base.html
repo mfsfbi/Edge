@@ -2,45 +2,53 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{% block title %}{{ site.company_name }} — Pharmaceuticals & Chemical Formulation{% endblock %}</title>
-<meta name="description" content="{{ site.company_name }} — pharmaceutical formulation, laboratory operations, quality control, production and technical services in Kenya.">
-<meta name="keywords" content="pharmaceuticals Kenya, pharmaceutical formulation, chemical formulation, laboratory, quality control, manufacturing, production, raw materials, packaging">
+<title>{% block title %}{{ site.company_name }} — Pharmaceuticals & Technical Services{% endblock %}</title>
+<meta name="description" content="{{ site.company_name }} — pharmaceutical services, technical operations, quality-focused work and client support in Kenya.">
+<meta name="keywords" content="pharmaceutical services Kenya, laboratory services, formulation support, quality control, production, technical services, pharmaceutical products">
 <meta name="theme-color" content="#741b3d">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
-<meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Pharmaceutical formulation, laboratory, production and quality-focused operations."><meta property="og:type" content="website"><meta property="og:url" content="{{ site.domain }}{{ request.path }}">
+<meta property="og:title" content="{{ site.company_name }} — {{ site.tagline }}"><meta property="og:description" content="Professional pharmaceutical services, technical operations and quality-focused client support."><meta property="og:type" content="website"><meta property="og:url" content="{{ site.domain }}{{ request.path }}">
 <link rel="canonical" href="{{ site.domain }}{{ request.path }}">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/static/uploads/{{ site.logo }}">
 <link rel="stylesheet" href="/static/css/app.css">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Pharmaceutical formulation, laboratory, production and quality-focused operations."}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":{{ site.company_name|tojson }},"url":{{ site.domain|tojson }},"telephone":{{ site.phone|tojson }},"email":{{ site.email|tojson }},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"},"areaServed":"Kenya","description":"Professional pharmaceutical services, technical operations and quality-focused client support."}</script>
 </head>
 <body>
-<div class="utility public-chrome"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Pharmaceuticals · Formulation · Quality</span></div><div class="utility-right"><span>Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
+<div class="utility public-chrome"><div class="wrap utility-in"><div class="utility-left"><span class="live-dot"></span><span>Pharmaceuticals · Technical Services · Quality</span></div><div class="utility-right"><span>Kenya</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a></div></div></div>
 <header class="site-nav public-chrome"><div class="wrap nav-in">
 <a href="/" class="brand" aria-label="{{ site.company_name }} home"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }} logo"></a>
 <button class="menu-btn" aria-label="Open menu" aria-expanded="false" type="button"><i data-lucide="menu"></i><span class="sr-only">Menu</span></button>
 </div></header>
-<div class="mobile-drawer" aria-label="Site navigation">
-  <div class="drawer-heading"><span>INTEX</span><small>Pharmaceutical operations</small></div>
+<nav class="mobile-drawer" aria-label="Site navigation">
+  <div class="drawer-heading"><span>{{ site.company_name }}</span><small>Pharmaceutical & technical services</small></div>
   <a href="/#home"><i data-lucide="house"></i> Home</a>
-  <a href="/#capabilities"><i data-lucide="sparkles"></i> Capabilities</a>
-  <a href="/services"><i data-lucide="layers-3"></i> Services</a>
-  <a href="/contact"><i data-lucide="phone"></i> Products & enquiries</a>
-  <a href="/#standards"><i data-lucide="shield-check"></i> Safety & quality</a>
-  <a href="/#process"><i data-lucide="workflow"></i> How we work</a>
+  <a href="/#services"><i data-lucide="briefcase-business"></i> What we do</a>
+  <a href="/#quality"><i data-lucide="shield-check"></i> Quality & safety</a>
+  <a href="/#products"><i data-lucide="package-check"></i> Products & solutions</a>
   <a href="/#gallery"><i data-lucide="images"></i> Gallery</a>
-  <a href="/contact"><i data-lucide="phone"></i> Contact</a>
-  <a href="/visit"><i data-lucide="qr-code"></i> Facility visit</a>
-</div>
+  <a href="/#reviews"><i data-lucide="star"></i> Client reviews</a>
+  <a href="/contact"><i data-lucide="message-square-text"></i> Contact us</a>
+  <a class="drawer-whatsapp" href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20would%20like%20to%20make%20an%20enquiry." target="_blank" rel="noopener noreferrer"><i data-lucide="message-circle"></i> WhatsApp</a>
+  {% if socials.facebook or socials.instagram or socials.tiktok or socials.linkedin or socials.x %}
+  <div class="drawer-socials" aria-label="Social media">
+    {% if socials.facebook %}<a href="{{ socials.facebook }}" target="_blank" rel="noopener noreferrer">FB</a>{% endif %}
+    {% if socials.instagram %}<a href="{{ socials.instagram }}" target="_blank" rel="noopener noreferrer">IG</a>{% endif %}
+    {% if socials.tiktok %}<a href="{{ socials.tiktok }}" target="_blank" rel="noopener noreferrer">TT</a>{% endif %}
+    {% if socials.linkedin %}<a href="{{ socials.linkedin }}" target="_blank" rel="noopener noreferrer">IN</a>{% endif %}
+    {% if socials.x %}<a href="{{ socials.x }}" target="_blank" rel="noopener noreferrer">X</a>{% endif %}
+  </div>
+  {% endif %}
+</nav>
 {% block content %}{% endblock %}
 
 <footer class="site-footer navy-footer" id="contact">
   <div class="wrap footer-main">
-    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Pharmaceutical formulation, technical operations and quality-focused support for healthcare and industrial needs.</p><div class="signature-line"><span>Digital experience by</span><strong>Toror Technology Company & Innovations</strong></div></div>
-    <div><span class="footer-title">Explore</span><a href="/#formulation">Formulation</a><a href="/#laboratory">Laboratory</a><a href="/#quality">Quality</a><a href="/#products">Products</a></div>
-    <div><span class="footer-title">Operations</span><a href="/#production">Production</a><a href="/#materials">Materials</a><a href="/#research">R&amp;D</a><a href="/services">Services</a></div>
-    <div><span class="footer-title">Reach us</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><a href="mailto:{{ site.email }}">{{ site.email }}</a><span>{{ site.address }}</span></div>
+    <div class="footer-brand"><img src="/static/uploads/{{ site.logo }}" alt="{{ site.company_name }}"><p>Professional pharmaceutical services, technical operations, quality-focused work and dependable client support.</p><div class="signature-line"><span>Digital experience by</span><strong>Toror Technology Company & Innovations</strong></div></div>
+    <div><span class="footer-title">Company</span><a href="/#services">What we do</a><a href="/#quality">Quality & safety</a><a href="/#products">Products</a><a href="/#gallery">Gallery</a></div>
+    <div><span class="footer-title">Connect</span><a href="/contact">Enquiries</a><a href="/#reviews">Client reviews</a><a href="https://wa.me/{{ site.whatsapp }}?text=Hello%20{{ site.company_name|urlencode }}%2C%20I%20would%20like%20to%20make%20an%20enquiry." target="_blank" rel="noopener noreferrer">WhatsApp</a><a href="tel:{{ site.phone }}">Call us</a></div>
+    <div><span class="footer-title">Reach us</span><a href="tel:{{ site.phone }}">{{ site.phone }}</a><a href="mailto:{{ site.email }}">{{ site.email }}</a><span>{{ site.address }}</span><div class="footer-socials">{% if socials.facebook %}<a class="social" href="{{ socials.facebook }}" target="_blank" rel="noopener noreferrer">FB</a>{% endif %}{% if socials.instagram %}<a class="social" href="{{ socials.instagram }}" target="_blank" rel="noopener noreferrer">IG</a>{% endif %}{% if socials.tiktok %}<a class="social" href="{{ socials.tiktok }}" target="_blank" rel="noopener noreferrer">TT</a>{% endif %}{% if socials.linkedin %}<a class="social" href="{{ socials.linkedin }}" target="_blank" rel="noopener noreferrer">IN</a>{% endif %}{% if socials.x %}<a class="social" href="{{ socials.x }}" target="_blank" rel="noopener noreferrer">X</a>{% endif %}</div></div>
   </div>
-  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Nairobi · Kenya</span><span class="footer-shortcuts"><a href="/#formulation">Formulation</a><a href="/#quality">Quality</a><a href="/#products">Products</a><a href="/#home">Back to top ↑</a></span></div>
+  <div class="wrap footer-bottom"><span>© {{ now.year }} {{ site.company_name }}. All rights reserved.</span><span>Nairobi · Kenya</span><span class="footer-shortcuts"><a href="/#quality">Quality</a><a href="/#products">Products</a><a href="/#reviews">Reviews</a><a href="#home">Back to top ↑</a></span></div>
 </footer>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script><script src="/static/js/app.js"></script>
 </body></html>

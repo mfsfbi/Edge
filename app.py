@@ -6,6 +6,7 @@ import sqlite3
 import uuid
 from datetime import datetime, date
 from pathlib import Path
+from urllib.parse import urlparse
 
 import qrcode
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, url_for
@@ -97,6 +98,22 @@ def init_db():
             controlled_reference TEXT,
             last_reviewed TEXT
         );
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            comment TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS enquiries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT,
+            subject TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
         """
     )
     defaults = {
@@ -162,10 +179,34 @@ def money(v):
     return f"KES {v:,.0f}"
 
 
+def external_social(value: str, platform: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if value.startswith("https://") or value.startswith("http://"):
+        return value
+    value = value.lstrip("@/")
+    bases = {
+        "facebook": "https://www.facebook.com/",
+        "instagram": "https://www.instagram.com/",
+        "tiktok": "https://www.tiktok.com/@",
+        "linkedin": "https://www.linkedin.com/in/",
+        "x": "https://x.com/",
+    }
+    return bases.get(platform, "") + value if value else ""
+
+
 @app.context_processor
 def inject_globals():
     s = settings()
-    return {"site": s, "now": datetime.now()}
+    socials = {k: external_social(s.get(k, ""), k) for k in ["facebook", "instagram", "tiktok", "linkedin", "x"]}
+    con = db()
+    summary = con.execute("SELECT COALESCE(AVG(rating),0) average, COUNT(*) count FROM reviews").fetchone()
+    reviews = con.execute("SELECT * FROM reviews ORDER BY id DESC LIMIT 6").fetchall()
+    con.close()
+    average = float(summary["average"] or 0)
+    review_summary = {"average": average, "count": int(summary["count"] or 0), "rounded": int(round(average)) if average else 0}
+    return {"site": s, "socials": socials, "reviews": reviews, "review_summary": review_summary, "now": datetime.now()}
 
 
 @app.route("/")
@@ -178,9 +219,42 @@ def services():
     return render_template("services.html")
 
 
-@app.route("/contact")
+@app.route("/contact", methods=["GET", "POST"])
 def contact():
-    return render_template("contact.html")
+    if request.method == "POST":
+        payload = request.form
+        name = (payload.get("name") or "Guest").strip()
+        phone = (payload.get("phone") or "").strip()
+        email = (payload.get("email") or "").strip()
+        subject = (payload.get("subject") or "General enquiry").strip()
+        message = (payload.get("message") or "").strip()
+        if name and phone and message:
+            con = db()
+            con.execute(
+                "INSERT INTO enquiries(name,phone,email,subject,message,created_at) VALUES(?,?,?,?,?,?)",
+                (name, phone, email, subject, message, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            )
+            con.commit(); con.close()
+            return render_template("contact.html", sent=True)
+    return render_template("contact.html", sent=False)
+
+
+@app.route("/review", methods=["POST"])
+def review():
+    name = (request.form.get("name") or "Guest").strip()
+    comment = (request.form.get("comment") or "").strip()
+    try:
+        rating = max(1, min(5, int(request.form.get("rating", "5"))))
+    except ValueError:
+        rating = 5
+    if name and comment:
+        con = db()
+        con.execute(
+            "INSERT INTO reviews(name,rating,comment,created_at) VALUES(?,?,?,?)",
+            (name, rating, comment, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        con.commit(); con.close()
+    return redirect(url_for("home") + "#reviews")
 
 
 @app.route("/visit", methods=["GET", "POST"])
@@ -274,6 +348,9 @@ def admin():
     employees = con.execute("SELECT * FROM employees ORDER BY id DESC").fetchall()
     batches = con.execute("SELECT * FROM production_batches ORDER BY id DESC LIMIT 8").fetchall()
     usage = con.execute("SELECT * FROM material_usage ORDER BY id DESC LIMIT 10").fetchall()
+    enquiries = con.execute("SELECT * FROM enquiries ORDER BY id DESC LIMIT 8").fetchall()
+    reviews_admin = con.execute("SELECT * FROM reviews ORDER BY id DESC LIMIT 8").fetchall()
+    review_summary = con.execute("SELECT COALESCE(AVG(rating),0) average, COUNT(*) count FROM reviews").fetchone()
     totals = con.execute(
         "SELECT COALESCE(SUM(CASE WHEN kind='income' THEN amount ELSE 0 END),0) income, "
         "COALESCE(SUM(CASE WHEN kind='expense' THEN amount ELSE 0 END),0) expense FROM transactions"
@@ -283,7 +360,9 @@ def admin():
     con.close()
     profit = totals["income"] - totals["expense"]
     return render_template("admin.html", visitors=visitors, transactions=transactions, employees=employees,
-                           batches=batches, usage=usage, income=totals["income"], expense=totals["expense"], profit=profit,
+                           batches=batches, usage=usage, enquiries=enquiries, reviews_admin=reviews_admin,
+                           review_average=float(review_summary["average"] or 0), review_count=int(review_summary["count"] or 0),
+                           income=totals["income"], expense=totals["expense"], profit=profit,
                            visitor_count=visitor_count, active_batches=active_batches)
 
 
