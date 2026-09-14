@@ -1,10 +1,36 @@
-{% extends 'base.html' %}{% block title %}{{name}} — O{% endblock %}{% block top_title %}{{name}}{% endblock %}{% block content %}
-<div class="service-shell"><div class="eyebrow">{{name|upper}}</div><h1>{{name}}</h1>
-<div class="grid2">
-<div class="card"><form class="form" onsubmit="event.preventDefault();requestO('{{service}}')"><label>Pickup<input id="pickup" autocomplete="street-address" placeholder="Your location or search"></label><button class="btn" type="button" onclick="useLocation()">Use my location</button><label class="destination-field">Destination<div class="input-row"><input id="destination" autocomplete="street-address" placeholder="Search a place or landmark"><button id="findDestination" class="btn small" type="button">Find</button></div><div id="destinationSuggestions" class="suggestions" hidden></div></label><input id="plat" type="hidden"><input id="plng" type="hidden"><input id="dlat" type="hidden"><input id="dlng" type="hidden">
-{% if service=='mover' %}<div class="grid2"><label>Items<input id="items" type="number" min="0" value="0"></label><label>Helpers<input id="helpers" type="number" min="0" value="0"></label></div>{% endif %}
-<label>Payment<select id="payment"><option value="cash">Cash</option><option value="mpesa">M-Pesa</option><option value="card">Card / wallet</option></select></label><label>Phone <span class="small">optional</span><input id="contact_phone" inputmode="tel" autocomplete="tel" placeholder="07xx xxx xxx"></label><div id="locationState" class="status">Finding your location…</div><button class="btn primary" type="submit">Request {{name}}</button></form></div>
-<div class="card"><div class="map-title"><strong>Choose your destination</strong><span class="small">Search above or tap the map</span></div><div id="map" class="map map-large"></div><div class="estimate"><div><div class="small">Estimated fare</div><div id="fare" class="big">—</div><div id="distance" class="small"></div></div><div><div class="small">Status</div><div id="status" class="status">Ready</div></div></div>
-{% if recent_successes %}<div class="recent-success"><div class="small">Repeat a successful trip</div>{% for r in recent_successes %}<button class="repeat-trip" type="button" onclick='repeatTrip({{r.pickup|tojson}}, {{r.destination|tojson}}, {{r.id}})'><span>{{r.pickup}}</span><span class="arrow">→</span><span>{{r.destination}}</span></button>{% endfor %}</div>{% endif %}
-</div></div></div>
-{% endblock %}{% block scripts %}<script>window.OService='{{service}}';function repeatTrip(pickup,destination){const p=document.getElementById('pickup'),d=document.getElementById('destination');if(p)p.value=pickup;if(d)d.value=destination;setHidden('plat','');setHidden('plng','');setHidden('dlat','');setHidden('dlng','');useLocation();setTimeout(()=>findDestination(true),700)}initServiceMap();</script>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}{{name}} — O{% endblock %}
+{% block top_title %}{{name}}{% endblock %}
+{% block content %}
+<div class="service-page service-{{service}}">
+  <div class="service-header">
+    <div><div class="eyebrow">{{name|upper}}</div><h1>{{name}}</h1></div>
+    <a class="btn small" href="/">O Services</a>
+  </div>
+  <div class="request-grid">
+    <div class="request-card card">
+      <form class="form" onsubmit="event.preventDefault();requestO('{{service}}')">
+        <label>Pickup<input id="pickup" autocomplete="street-address" placeholder="Current location or search"></label>
+        <button class="btn" type="button" onclick="useLocation()">Use current location</button>
+        <label>Destination
+          <div class="input-row"><input id="destination" autocomplete="street-address" placeholder="Search a place or landmark"><button id="findDestination" class="btn small" type="button">Search</button></div>
+          <div id="destinationSuggestions" class="suggestions" hidden></div>
+        </label>
+        <input id="plat" type="hidden"><input id="plng" type="hidden"><input id="dlat" type="hidden"><input id="dlng" type="hidden">
+        {% if service=='mover' %}<div class="grid2 compact-grid"><label>Items<input id="items" type="number" min="0" value="0"></label><label>Helpers<input id="helpers" type="number" min="0" value="0"></label></div>{% endif %}
+        <div class="payment-box"><div class="payment-title">Payment</div><div class="payment-options"><label class="pay-choice"><input type="radio" name="payment" value="mpesa" checked><span>M-Pesa</span></label><label class="pay-choice"><input type="radio" name="payment" value="cash"><span>Cash</span></label><label class="pay-choice"><input type="radio" name="payment" value="card"><span>Card</span></label></div></div>
+        <label>Contact phone <span class="small">optional</span><input id="contact_phone" inputmode="tel" autocomplete="tel" placeholder="07xx xxx xxx"></label>
+        <div id="locationState" class="status">Location ready when you are.</div>
+        <button class="btn primary request-button" type="submit">Request {{name}}</button>
+      </form>
+    </div>
+    <div class="route-card card">
+      <div class="map-title"><div><strong>Set your destination</strong><div class="small">Search a place or tap the map.</div></div><span class="map-hint">Tap map</span></div>
+      <div id="map" class="map map-xl"></div>
+      <div class="estimate estimate-large"><div><div class="small">Estimated fare</div><div id="fare" class="big fare-value">—</div><div id="distance" class="small"></div></div><div><div class="small">Trip</div><div id="status" class="status">Ready</div></div></div>
+      {% if recent_successes %}<div class="recent-success"><div class="small">Repeat</div>{% for r in recent_successes %}<button class="repeat-trip" type="button" onclick='repeatTrip({{r.pickup|tojson}}, {{r.destination|tojson}}, {{r.id}})'><span>{{r.pickup}}</span><span class="arrow">→</span><span>{{r.destination}}</span></button>{% endfor %}</div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>window.OService='{{service}}';function repeatTrip(pickup,destination){const p=document.getElementById('pickup'),d=document.getElementById('destination');if(p)p.value=pickup;if(d)d.value=destination;setHidden('plat','');setHidden('plng','');setHidden('dlat','');setHidden('dlng','');useLocation();setTimeout(()=>findDestination(true),700)}initServiceMap();</script>{% endblock %}

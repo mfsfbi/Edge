@@ -46,7 +46,7 @@ app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, 
 ADMIN_PATH = 'promise212324'
 
 SERVICES = {'bike':'O-Ride','ride':'O-Drive','mover':'O-Movers'}
-PROVIDER_PATHS = {'bike':'/O-Ride','ride':'/O-Drive','mover':'/O-Movers'}
+PROVIDER_PATHS = {'bike':'/O-Rider','ride':'/O-Drive','mover':'/O-Movers'}
 STATUS_COLORS = {'available':'orange','assigned':'green','enroute':'green','on_trip':'blue','offline':'gray'}
 
 
@@ -125,8 +125,8 @@ def init_db():
     req_cols={r['name'] for r in c.execute('PRAGMA table_info(requests)').fetchall()}
     if 'contact_phone' not in req_cols: c.execute('ALTER TABLE requests ADD COLUMN contact_phone TEXT')
     defaults={
-      'bike_base':'60','bike_per_km':'22','ride_base':'150','ride_per_km':'48',
-      'mover_base':'700','mover_per_km':'70','mover_item_fee':'120','mover_helper_fee':'700','platform_commission':'10',
+      'bike_base':'55','bike_per_km':'18','ride_base':'110','ride_per_km':'42',
+      'mover_base':'600','mover_per_km':'60','mover_item_fee':'100','mover_helper_fee':'650','platform_commission':'10',
       'otravel_url':'https://otravel-bleg.onrender.com/','support_phone':'','app_name':'O'
     }
     for k,v in defaults.items(): c.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,v))
@@ -361,13 +361,15 @@ def client_error():
 def service_page(service):
     if service not in SERVICES: return 'Not found',404
     upsert_visitor({})
-    u=current_user() or get_guest_user()
-    c=get_db()
-    recent_successes=c.execute(
-        "SELECT id,pickup,destination,fare,completed_at FROM requests WHERE customer_id=? AND service=? AND status='completed' ORDER BY completed_at DESC, id DESC LIMIT 4",
-        (u['id'],service)
-    ).fetchall()
-    c.close()
+    u=current_user()
+    recent_successes=[]
+    if u and u['role']=='customer':
+        c=get_db()
+        recent_successes=c.execute(
+            "SELECT id,pickup,destination,fare,completed_at FROM requests WHERE customer_id=? AND service=? AND status='completed' ORDER BY completed_at DESC, id DESC LIMIT 4",
+            (u['id'],service)
+        ).fetchall()
+        c.close()
     return render_template('service.html',service=service,name=SERVICES[service],user=current_user(),recent_successes=recent_successes)
 
 @app.route('/login',methods=['GET','POST'])
@@ -504,10 +506,15 @@ def provider_entry(service):
 
 def driver_dashboard_view(d):
     u=current_user()
-    c=get_db(); jobs=c.execute('SELECT r.*,u.name customer_name FROM requests r JOIN users u ON u.id=r.customer_id WHERE r.driver_id=? ORDER BY r.id DESC LIMIT 30',(u['id'],)).fetchall(); c.close()
-    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']])
+    c=get_db()
+    jobs=c.execute("SELECT r.*,u.name customer_name FROM requests r JOIN users u ON u.id=r.customer_id WHERE r.driver_id=? AND r.service=? ORDER BY CASE r.status WHEN 'assigned' THEN 0 WHEN 'accepted' THEN 1 WHEN 'on_trip' THEN 2 ELSE 3 END, r.id DESC LIMIT 40",(u['id'],d['service'])).fetchall()
+    pending=sum(1 for j in jobs if j['status']=='assigned')
+    completed=c.execute("SELECT COUNT(*) n FROM requests WHERE driver_id=? AND service=? AND status='completed'",(u['id'],d['service'])).fetchone()['n']
+    earnings=c.execute("SELECT COALESCE(SUM(fare),0) n FROM requests WHERE driver_id=? AND service=? AND status='completed'",(u['id'],d['service'])).fetchone()['n']
+    c.close()
+    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']],pending=pending,completed=completed,earnings=earnings)
 
-@app.route('/O-Ride')
+@app.route('/O-Rider')
 def provider_ride():
     return provider_entry('bike')
 
@@ -594,6 +601,16 @@ def admin_visitors():
     for r in rows:
         d=dict(r); d['service_name']=labels.get(d.get('last_service'), d.get('last_service') or 'Browsing O'); out.append(d)
     return jsonify(items=out)
+
+@app.route('/promise212324/api/service/<service>')
+@admin_required
+def admin_service(service):
+    if service not in SERVICES: return jsonify(error='Unknown service'),404
+    c=get_db()
+    drivers=c.execute("SELECT d.user_id,d.service,d.status,d.lat,d.lng,d.rating,u.name,u.phone,u.active,u.verified FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.service=? AND u.active=1",(service,)).fetchall()
+    requests=c.execute("SELECT r.id,r.pickup,r.destination,r.fare,r.status,r.created_at,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id WHERE r.service=? ORDER BY r.id DESC LIMIT 100",(service,)).fetchall()
+    c.close()
+    return jsonify(service=service,drivers=[dict(x) for x in drivers],requests=[dict(x) for x in requests])
 
 @app.route('/promise212324/control')
 @admin_required

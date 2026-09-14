@@ -1,11 +1,19 @@
-{% extends 'base.html' %}{% block title %}O{% endblock %}{% block top_title %}Welcome to O{% endblock %}{% block content %}
-<section class="o-splash" id="oSplash"><div class="o-glow">O</div><div class="small splash-note">GOOD TO HAVE YOU HERE</div></section>
-<section class="home-intro"><div class="small">WELCOME TO</div><div class="o">O</div><h1>What can we do for you today?</h1><p>Choose where you need us.</p></section>
-<div class="grid4 service-cards">
-<a class="card service" href="/service/bike"><div><div class="eyebrow">O-RIDE</div><h2>O-Ride</h2></div><span class="go">Ride →</span></a>
-<a class="card service" href="/service/mover"><div><div class="eyebrow">O-MOVERS</div><h2>O-Movers</h2></div><span class="go">Move →</span></a>
-<a class="card service" href="/service/ride"><div><div class="eyebrow">O-DRIVE</div><h2>O-Drive</h2></div><span class="go">Drive →</span></a>
-<a class="card service" href="{{ otravel_url }}"><div><div class="eyebrow">O-TRAVELS</div><h2>O-Travels</h2></div><span class="go">Explore →</span></a>
-</div>
-<div class="card share"><div><div class="eyebrow">SHARE O</div><h2>Bring someone with you.</h2><div class="small">Scan to open O.</div></div><img src="/qr" alt="O QR"></div>
+{% extends 'base.html' %}
+{% block title %}O{% endblock %}
+{% block top_title %}O{% endblock %}
+{% block content %}
+<section class="o-home">
+  <div class="o-mark o-mark-main" aria-label="O">O</div>
+  <div class="service-heading">O-Services</div>
+  <div class="service-launcher">
+    <a class="service-button ride" href="/service/bike"><span>O-Ride</span><small>Bike rides</small></a>
+    <a class="service-button drive" href="/service/ride"><span>O-Drive</span><small>Car rides</small></a>
+    <a class="service-button movers" href="/service/mover"><span>O-Movers</span><small>Moving</small></a>
+    <a class="service-button travels" href="https://otravel-bleg.onrender.com/"><span>O-Travels</span><small>Travel</small></a>
+  </div>
+  <div class="home-actions">
+    {% if user and user['role']=='customer' %}<a class="home-link" href="/dashboard">My O</a>{% else %}<a class="home-link" href="/login">Log in</a>{% endif %}
+    <a class="home-link" href="/qr">Share O</a>
+  </div>
+</section>
 {% endblock %}
