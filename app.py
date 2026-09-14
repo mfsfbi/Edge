@@ -42,6 +42,7 @@ SECRET_KEY = hashlib.sha256((ADMIN_USERNAME + '|' + ADMIN_PASSWORD + '|O-MOBILIT
 
 app = Flask(__name__, template_folder=str(BASE_DIR / 'app' / 'templates'), static_folder=str(BASE_DIR / 'app' / 'static'), static_url_path='/static')
 app.secret_key = SECRET_KEY
+app.config['O_BUILD_VERSION'] = 'V12-PROVIDER-ROUTES'
 app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')))
 ADMIN_PATH = 'promise212324'
 
@@ -269,7 +270,8 @@ def security_headers(resp):
     return resp
 
 @app.route('/health')
-def health(): return jsonify(ok=True, service='O Mobility', time=now())
+def health():
+    return jsonify(ok=True, service='O Mobility', version=app.config.get('O_BUILD_VERSION'), routes=['/O-Ride','/O-Drive','/O-Movers'], time=now())
 
 @app.route('/robots.txt')
 def robots(): return app.response_class('User-agent: *\nAllow: /\nSitemap: '+url_for('sitemap',_external=True)+'\n',mimetype='text/plain')
@@ -364,7 +366,7 @@ def api_route():
         route=routes[0]
         return jsonify(distance_km=round(float(route.get('distance') or 0)/1000,3),duration_min=round(float(route.get('duration') or 0)/60,1),geometry=(route.get('geometry') or {}).get('coordinates',[]))
     except Exception:
-        return jsonify(error='Road route temporarily unavailable.'),503
+        return jsonify(distance_km=0,duration_min=0,geometry=[],routing_available=False,error='Road routing temporarily unavailable.'),200
 
 @app.route('/api/visitor/context',methods=['POST'])
 def visitor_context():
@@ -534,7 +536,7 @@ def provider_entry(service):
     u=current_user()
     target=PROVIDER_PATHS[service]
     if not u:
-        return redirect(url_for('login', next=target+'?provider=1'))
+        return redirect(url_for('login', provider='1', next=target))
     if u['role']!='driver':
         abort(404)
     c=get_db(); d=c.execute('SELECT d.*,u.name,u.phone,u.verified,u.active FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(u['id'],)).fetchone(); c.close()
@@ -559,10 +561,13 @@ def provider_ride():
 
 @app.route('/O-Drive')
 @app.route('/O-drive')
+@app.route('/o-drive')
 def provider_drive():
     return provider_entry('ride')
 
 @app.route('/O-Movers')
+@app.route('/O-Mover')
+@app.route('/o-movers')
 def provider_movers():
     return provider_entry('mover')
 
@@ -769,5 +774,8 @@ def admin_export():
 
 @app.route('/logout-all')
 def noop(): return redirect(url_for('home'))
+
+print('O Mobility build:', app.config.get('O_BUILD_VERSION'))
+print('O Mobility provider routes:', '/O-Ride', '/O-Drive', '/O-Movers')
 
 if __name__=='__main__': app.run(debug=True)

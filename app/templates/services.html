@@ -12,7 +12,7 @@
       <a class="service-button movers" href="/service/mover" aria-label="O-Movers"><span class="service-icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 16h23v18H7zM30 23h7l5 6v5H30z"/><circle cx="15" cy="37" r="4"/><circle cx="35" cy="37" r="4"/><path d="M30 23v11M10 11h15"/></svg></span><span>O-Movers</span></a>
       <a class="service-button travels" href="{{ otravel_url }}" aria-label="O-Travels"><span class="service-icon"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 31l14-5 6-16c.8-2 3.7-1.7 4.1.4L34 26l8 4c2 .9 1.3 3.8-.8 3.5l-9.4-1.2-2.8 5.6-3.2-.7 1-5.7-6.8-1.5-3.3 3.8-3-.7 2.1-4.1L9 28.7z"/></svg></span><span>O-Travels</span></a>
     </div>
-    <div class="home-nav-actions"><a class="btn small" href="/qr">Get O QR</a>{% if user and user['role']=='customer' %}<a class="btn small" href="/dashboard">My O</a>{% endif %}</div>
+    <div class="partner-access"><span>O partners</span><a href="/O-Ride">O-Ride login</a><a href="/O-Drive">O-Drive login</a><a href="/O-Movers">O-Movers login</a></div><div class="home-nav-actions"><a class="btn small" href="/qr">Get O QR</a>{% if user and user['role']=='customer' %}<a class="btn small" href="/dashboard">My O</a>{% endif %}</div>
   </div>
 </section>
 {% endblock %}

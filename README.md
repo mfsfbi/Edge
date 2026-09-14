@@ -1,31 +1,37 @@
-# O Mobility
+# O Mobility — V11 Dashboard Routes
 
-O is a mobile-first PWA for:
-- O-Ride — bike passenger service
-- O-Drive — car service
-- O-Movers — moving service
-- O-Travels — links to https://otravel-bleg.onrender.com/
+This build makes the provider entry URLs explicit and versioned:
+
+- /O-Ride
+- /O-Drive
+- /O-drive
+- /O-Movers
+- /O-Mover
+- /o-movers
+
+Unauthenticated providers are sent to the provider login and then returned to the correct service dashboard after successful login.
+
+## Deployment check
+
+After deploying, open:
+
+`/health`
+
+It must return JSON containing:
+
+`"version": "V11-DASHBOARD-ROUTES"`
+
+and the route list containing `/O-Ride`, `/O-Drive`, and `/O-Movers`.
+
+If `/health` still shows an older version, Render is running an older commit/package and the provider-route fix has not been deployed.
 
 ## Render
-Only two environment variables are required:
+
+Keep the start command:
+
+`gunicorn --workers 2 --threads 4 --timeout 120 app:app`
+
+Required environment variables are only:
 
 - `USER_NAME`
 - `PASSWORD`
-
-Admin entry: `/promise212324`
-Provider entries:
-- `/O-Rider` — O-Ride partners
-- `/O-Drive` — O-Drive partners
-- `/O-Movers` — O-Movers partners
-
-Customers use `/` then `/services` and the public service pages. Provider accounts are created by Admin; there is no public provider self-registration.
-
-`render.yaml` includes a persistent disk at `/var/data` for production data retention. On Render, use a compatible persistent-disk service plan when you need data to survive redeploys.
-
-## V10 mobility flow updates
-- `/O-Ride` opens the O-Ride rider dashboard entry and then the service-specific login.
-- `/O-Drive` and `/O-Movers` behave the same for their service partners.
-- Nearest available partner is selected using current reported partner coordinates.
-- Partner status visuals: orange = available, green = customer assigned/approaching, blue = passenger onboard; completion returns the partner to available.
-- `/api/route` uses OSRM road routing for map lines and road distance, with a straight-line fallback only if routing is temporarily unavailable.
-- Admin Control Room has a Simulate switch and a safe full-journey demonstration page.
