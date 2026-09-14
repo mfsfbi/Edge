@@ -1,4 +1,7 @@
-{% extends 'base.html' %}{% block content %}
-<div class="section-title"><div><div class="kicker">Admin</div><h1>People & devices</h1><div class="route-note">Device names are captured from browser/device information when available; exact handset models are not exposed by every browser.</div></div></div>
-<div class="card"><div class="tablewrap"><table class="table"><thead><tr><th>Person</th><th>Phone</th><th>Role</th><th>Device</th><th>Browser</th><th>Page</th><th>Time</th></tr></thead><tbody>{% for p in people %}<tr><td>{{p.display_name}}</td><td>{{p.account_phone or 'Guest'}}</td><td>{{p.role}}</td><td>{{p.device_model or p.device or 'Unknown device'}}</td><td>{{p.browser or '—'}}</td><td>{{p.page}}</td><td>{{p.created_at}}</td></tr>{% else %}<tr><td colspan="7" class="muted">No activity yet.</td></tr>{% endfor %}</tbody></table></div></div>
+{% extends 'base.html' %}
+{% block content %}
+<div class="section-title"><div><div class="kicker">Control room / people</div><h1>People & devices</h1><div class="route-note">Useful identity details for people entering O. Browser strings are kept out of the main view.</div></div></div>
+<div class="card"><div class="tablewrap"><table class="table"><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Device</th><th>Browser</th><th>Service</th><th>Location</th><th>Last seen</th></tr></thead><tbody>
+{% for p in people %}<tr><td><strong>{{p.display_name}}</strong>{% if p.username %}<div class="route-note">{{p.username}}</div>{% endif %}</td><td>{{p.role}}</td><td>{{p.account_phone or 'Not provided'}}</td><td>{{p.device_model or p.device or 'Unknown device'}}</td><td>{{p.browser or 'Unknown browser'}}</td><td>{{p.service or 'Browsing'}}</td><td>{% if p.lat and p.lon %}<span class="badge status-green">Location shared</span>{% else %}<span class="muted">Not shared</span>{% endif %}</td><td>{{p.created_at}}</td></tr>{% else %}<tr><td colspan="8" class="muted">No people recorded yet.</td></tr>{% endfor %}
+</tbody></table></div></div>
 {% endblock %}

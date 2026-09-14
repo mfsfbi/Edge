@@ -167,6 +167,7 @@ def nav(role='customer', service=None):
         <details class="navgroup"><summary>Control</summary>
           <a class="navsub" href="/promise212324/inbox">Inbox</a>
           <a class="navsub" href="/promise212324/complaints">Complaints</a>
+          <a class="navsub" href="/promise212324/ratings">Ratings</a>
           <a class="navsub" href="/promise212324/partners">Partners</a>
           <a class="navsub" href="/promise212324/people">People & devices</a>
           <a class="navsub" href="/promise212324/simulate">Simulation</a>
@@ -317,7 +318,7 @@ def login():
     err=''; next_url=request.args.get('next','/services')
     if request.method=='POST':
         identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
-        a=q('SELECT * FROM accounts WHERE lower(username)=? AND active=1',(identifier,),True)
+        a=q('SELECT * FROM accounts WHERE active=1 AND (lower(username)=? OR lower(name)=? OR replace(phone," ","")=?) ORDER BY id LIMIT 1',(identifier,identifier,identifier.replace(' ','')),True)
         if a and check_password_hash(a['password_hash'],pw):
             session['account_id']=a['id']
             return redirect(SERVICE_PATHS.get(a['service'],'/services') if a['role']=='partner' else (next_url if next_url.startswith('/') else '/services'))
@@ -593,11 +594,40 @@ def create_request():
     return jsonify(ok=True,id=rid,fare=fare,assigned=best['name'] if best else None,status='assigned' if best else 'requested')
 
 
+@app.post('/api/pwa/install')
+def pwa_install():
+    data=request.get_json(silent=True) or {}
+    try:
+        db().execute("CREATE TABLE IF NOT EXISTS pwa_installs(id INTEGER PRIMARY KEY AUTOINCREMENT,account_id INTEGER,event TEXT,created_at TEXT NOT NULL)")
+        a=actor(); db().execute('INSERT INTO pwa_installs(account_id,event,created_at) VALUES(?,?,?)',(a['id'] if a else None,data.get('event','install'),now()))
+    except Exception as e:
+        add_error('server','/api/pwa/install',500,'POST',str(e))
+    return jsonify(ok=True)
+
+
 # Admin
 @app.route(ADMIN_PATH, methods=['GET','POST'])
 def admin_login():
     if session.get('admin'):
-        stats={'customers':q("SELECT count(*) c FROM accounts WHERE role='customer'",one=True)['c'],'partners':q("SELECT count(*) c FROM accounts WHERE role='partner'",one=True)['c'],'open_requests':q("SELECT count(*) c FROM requests WHERE status IN ('requested','assigned','on_trip')",one=True)['c'],'open_feedback':q("SELECT count(*) c FROM feedback WHERE status='open'",one=True)['c'],'devices':q("SELECT count(DISTINCT COALESCE(device_model,device)) c FROM events",one=True)['c']}
+        def count(sql,args=()): return q(sql,args,True)['c']
+        stats={
+            'customers':count("SELECT count(*) c FROM accounts WHERE role='customer'"),
+            'partners':count("SELECT count(*) c FROM accounts WHERE role='partner'"),
+            'open_requests':count("SELECT count(*) c FROM requests WHERE status IN ('requested','assigned','on_trip')"),
+            'open_feedback':count("SELECT count(*) c FROM feedback WHERE status='open'"),
+            'devices':count("SELECT count(DISTINCT COALESCE(device_model,device)) c FROM events"),
+            'ride_partners':count("SELECT count(*) c FROM partners WHERE service='ride' AND status!='offline'"),
+            'drive_partners':count("SELECT count(*) c FROM partners WHERE service='drive' AND status!='offline'"),
+            'mover_partners':count("SELECT count(*) c FROM partners WHERE service='mover' AND status!='offline'"),
+            'ride_open':count("SELECT count(*) c FROM requests WHERE service='ride' AND status IN ('requested','assigned','on_trip')"),
+            'drive_open':count("SELECT count(*) c FROM requests WHERE service='drive' AND status IN ('requested','assigned','on_trip')"),
+            'mover_open':count("SELECT count(*) c FROM requests WHERE service='mover' AND status IN ('requested','assigned','on_trip')"),
+            'people':count("SELECT count(DISTINCT COALESCE(device_model,device)) c FROM events WHERE COALESCE(device_model,device)!=''"),
+            'complaints':count("SELECT count(*) c FROM feedback WHERE kind='complaint' AND status='open'"),
+            'errors':count("SELECT count(*) c FROM system_errors WHERE status='open'"),
+            'ratings':count("SELECT count(*) c FROM ratings"),
+            'simulate':q("SELECT value FROM settings WHERE key='simulate'",one=True)['value']=='1',
+        }
         return render_template('admin.html',sidebar=nav('admin'),stats=stats,page_theme='light')
     err=''
     if request.method=='POST':
@@ -642,7 +672,7 @@ def toggle_partner(pid):
 @app.get(ADMIN_PATH+'/people')
 @admin_required
 def admin_people():
-    people=q('''SELECT e.*,COALESCE(a.name,e.role,'Guest') display_name,COALESCE(a.phone,'') account_phone FROM events e LEFT JOIN accounts a ON a.id=e.customer_id ORDER BY e.id DESC LIMIT 160''')
+    people=q('''SELECT e.*,COALESCE(a.name,e.role,'Guest') display_name,COALESCE(a.username,'') username,COALESCE(a.phone,'') account_phone FROM events e LEFT JOIN accounts a ON a.id=e.customer_id ORDER BY e.id DESC LIMIT 160''')
     return render_template('admin_people.html',sidebar=nav('admin'),people=people,page_theme='light')
 
 @app.get(ADMIN_PATH+'/inbox')
@@ -656,6 +686,12 @@ def admin_inbox():
 def admin_complaints():
     rows=q("SELECT f.*,a.name account_name,a.phone account_phone FROM feedback f LEFT JOIN accounts a ON a.id=f.customer_id WHERE f.kind='complaint' ORDER BY f.id DESC LIMIT 120")
     return render_template('admin_feedback.html',sidebar=nav('admin'),heading='Complaints',rows=rows,mode='complaints',page_theme='light')
+
+@app.get(ADMIN_PATH+'/ratings')
+@admin_required
+def admin_ratings():
+    rows=q('SELECT r.*,c.name customer_name,c.phone customer_phone,p.service,a.name partner_name FROM ratings r LEFT JOIN accounts c ON c.id=r.customer_id LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id ORDER BY r.id DESC LIMIT 160')
+    return render_template('admin_feedback.html',sidebar=nav('admin'),heading='Ratings',rows=rows,mode='ratings',page_theme='light')
 
 @app.post(ADMIN_PATH+'/feedback/<int:fid>/close')
 @admin_required
