@@ -1,25 +1,7 @@
 {% extends 'base.html' %}
-{% block head %}<meta http-equiv="Cache-Control" content="no-store">{% endblock %}
 {% block content %}
-<div class="entry-stage" id="entryStage">
-  <div class="entry-orbit" aria-hidden="true">
-    <svg viewBox="0 0 220 220"><circle class="o-track" cx="110" cy="110" r="78"></circle><circle class="o-draw" cx="110" cy="110" r="78"></circle></svg>
-  </div>
-  <div class="entry-word" id="entryWord">Warm service.</div>
-  <div class="entry-sub" id="entrySub">Simple journeys. Friendly people.</div>
-  <div class="entry-qr"><a class="qr-placeholder" href="/services"><img src="/qr-image.svg" alt="O QR code"></a><div><b>O QR</b><span>Scan or tap to open O Services.</span></div></div>
-  <a class="btn primary entry-continue" id="entryContinue" href="/services">Continue</a>
-</div>
-{% endblock %}
-{% block scripts %}
+<div class="entry-stage" id="entryStage"><div><div class="entry-o"><svg viewBox="0 0 180 180"><circle class="track" cx="90" cy="90" r="78"/><circle class="draw" cx="90" cy="90" r="78"/></svg></div><h1 class="entry-copy" style="font-size:clamp(34px,7vw,66px);margin:12px 0 4px">Move with O.</h1><p class="entry-sub">Warm, simple transport for the way you are going.</p><div class="entry-goto" style="margin-top:18px"><a class="btn primary" href="/services">Enter O Services</a></div></div></div>
 <script>
-(function(){
- const stage=document.getElementById('entryStage'), word=document.getElementById('entryWord'), sub=document.getElementById('entrySub'), enter=document.getElementById('entryContinue');
- const messages=[['Warm service.','Simple journeys. Friendly people.'],['Move with O.','Easy to start. Easy to understand.']]; let i=0;
- setTimeout(()=>{i=1;word.textContent=messages[i][0];sub.textContent=messages[i][1]},1350);
- setTimeout(()=>stage.classList.add('ready'),2200);
- setTimeout(()=>{if(document.visibilityState==='visible') window.location.replace('/services')},3600);
- enter.addEventListener('click',()=>stage.classList.add('leave'));
-})();
+(function(){const key='o_entry_seen_v1';const stage=document.getElementById('entryStage');if(sessionStorage.getItem(key)==='1'){location.replace('/services');return}setTimeout(()=>{sessionStorage.setItem(key,'1');location.replace('/services')},2600)})();
 </script>
 {% endblock %}
