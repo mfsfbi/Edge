@@ -16,11 +16,10 @@ os.makedirs(DATA,exist_ok=True)
 DB=os.path.join(DATA,'o_system_v1.db')
 SERVICES={'ride':'O-Ride','drive':'O-Drive','mover':'O-Movers'}
 SERVICE_PATHS={'ride':'/O-Ride','drive':'/O-Drive','mover':'/O-Movers'}
-SERVICE_ICONS={'ride':'🏍️','drive':'🚗','mover':'🚚','travel':'✈️'}
 SERVICE_COLORS={'ride':'gold','drive':'green','mover':'blue','travel':'primary'}
 
 SCHEMA='''
-CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, service TEXT, phone TEXT, created_at TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, service TEXT, phone TEXT, theme TEXT NOT NULL DEFAULT 'light', created_at TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS partners(id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER UNIQUE NOT NULL, service TEXT NOT NULL, vehicle TEXT, plate TEXT, licence TEXT, rating REAL NOT NULL DEFAULT 5.0, completed INTEGER NOT NULL DEFAULT 0, earnings REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'offline', lat REAL, lon REAL, last_seen TEXT, FOREIGN KEY(account_id) REFERENCES accounts(id));
 CREATE TABLE IF NOT EXISTS requests(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, guest_name TEXT, service TEXT NOT NULL, pickup_name TEXT, destination_name TEXT, pickup_lat REAL, pickup_lon REAL, dest_lat REAL, dest_lon REAL, fare REAL, payment TEXT, status TEXT NOT NULL DEFAULT 'requested', partner_id INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(customer_id) REFERENCES accounts(id), FOREIGN KEY(partner_id) REFERENCES partners(id));
 CREATE TABLE IF NOT EXISTS ratings(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, partner_id INTEGER, request_id INTEGER, app_rating INTEGER, partner_rating INTEGER, note TEXT, created_at TEXT NOT NULL);
@@ -31,7 +30,11 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 def db():
  if 'db' not in g:
-  g.db=sqlite3.connect(DB); g.db.row_factory=sqlite3.Row; g.db.executescript(SCHEMA); g.db.commit()
+  g.db=sqlite3.connect(DB); g.db.row_factory=sqlite3.Row; g.db.executescript(SCHEMA)
+  cols={r['name'] for r in g.db.execute('PRAGMA table_info(accounts)').fetchall()}
+  if 'theme' not in cols:
+   g.db.execute("ALTER TABLE accounts ADD COLUMN theme TEXT NOT NULL DEFAULT 'light'")
+  g.db.commit()
  return g.db
 @app.teardown_appcontext
 def close_db(exc):
@@ -43,11 +46,11 @@ def q(sql,args=(),one=False):
  cur=db().execute(sql,args); rows=cur.fetchall(); return (rows[0] if rows else None) if one else rows
 def nav(role='customer',service=None):
  if role=='admin':
-  return '''<nav><a class="navbtn active" href="/promise212324">Overview <span>⌂</span></a><div class="navsection"><h4>O Services</h4><a class="navbtn" href="/promise212324/service/ride">O-Ride <span>›</span></a><a class="navbtn" href="/promise212324/service/drive">O-Drive <span>›</span></a><a class="navbtn" href="/promise212324/service/mover">O-Movers <span>›</span></a></div><div class="navsection"><h4>Control</h4><a class="navbtn" href="/promise212324/inbox">Inbox <span>›</span></a><a class="navbtn" href="/promise212324/complaints">Complaints <span>›</span></a><a class="navbtn" href="/promise212324/partners">Partners <span>›</span></a><a class="navbtn" href="/promise212324/people">People & usage <span>›</span></a><a class="navbtn" href="/promise212324/simulate">Simulate <span>›</span></a><a class="navbtn" href="/promise212324/system">System <span>›</span></a></div></nav>'''
+  return '''<nav><a class="navbtn active" href="/promise212324">Overview </a><div class="navsection"><h4>O Services</h4><a class="navbtn" href="/promise212324/service/ride">O-Ride </a><a class="navbtn" href="/promise212324/service/drive">O-Drive </a><a class="navbtn" href="/promise212324/service/mover">O-Movers </a></div><div class="navsection"><h4>Control</h4><a class="navbtn" href="/promise212324/inbox">Inbox </a><a class="navbtn" href="/promise212324/complaints">Complaints </a><a class="navbtn" href="/promise212324/partners">Partners </a><a class="navbtn" href="/promise212324/people">People & usage </a><a class="navbtn" href="/promise212324/simulate">Simulate </a><a class="navbtn" href="/promise212324/system">System </a></div><a class="navbtn" href="/promise212324/logout">Sign out </a></nav>'''
  if role=='partner':
-  return f'''<nav><a class="navbtn active" href="{SERVICE_PATHS.get(service,'/')}">{SERVICES.get(service,service or 'Partner')} Dashboard <span>⌂</span></a><a class="navbtn" href="/partner/requests">Requests <span>›</span></a><a class="navbtn" href="/partner/earnings">Earnings <span>›</span></a><a class="navbtn" href="/partner/ratings">Ratings <span>›</span></a><a class="navbtn" href="/partner/help">Help <span>›</span></a><a class="navbtn" href="/logout">Sign out <span>↗</span></a></nav>'''
- logged='''<nav><a class="navbtn active" href="/services">Services <span>⌂</span></a><a class="navbtn" href="/customer/trips">My trips <span>›</span></a><a class="navbtn" href="/customer/ratings">Ratings & feedback <span>›</span></a><a class="navbtn" href="/help">Help, concern or request <span>›</span></a><a class="navbtn" href="/logout">Sign out <span>↗</span></a></nav>'''
- guest='''<nav><a class="navbtn active" href="/services">Services <span>⌂</span></a><a class="navbtn" href="/login">Sign in <span>›</span></a><a class="navbtn" href="/account/register">Create account <span>›</span></a><a class="navbtn" href="/help">Help, concern or request <span>›</span></a></nav>'''
+  return f'''<nav><a class="navbtn active" href="{SERVICE_PATHS.get(service,'/')}">{SERVICES.get(service,service or 'Partner')} Dashboard </a><a class="navbtn" href="/partner/requests">Requests </a><a class="navbtn" href="/partner/earnings">Earnings </a><a class="navbtn" href="/partner/ratings">Ratings </a><a class="navbtn" href="/partner/help">Help </a><a class="navbtn" href="/logout">Sign out </a></nav>'''
+ logged='''<nav><a class="navbtn active" href="/services">Services </a><a class="navbtn" href="/customer/trips">My trips </a><a class="navbtn" href="/customer/ratings">Ratings & feedback </a><a class="navbtn" href="/help">Help & requests </a><a class="navbtn" href="/qr">O QR </a><a class="navbtn" href="/account">My account </a><a class="navbtn" href="/settings">Appearance </a><a class="navbtn" href="/logout">Sign out </a></nav>'''
+ guest='''<nav><a class="navbtn active" href="/services">Services </a><a class="navbtn" href="/help">Help & requests </a><a class="navbtn" href="/qr">O QR </a><a class="navbtn" href="/login">Sign in </a><a class="navbtn" href="/account/register">Create account </a></nav>'''
  return logged if session.get('account_id') else guest
 
 def actor():
@@ -89,11 +92,15 @@ def health(): return jsonify(ok=True,version='O-System V1')
 
 @app.get('/')
 def home():
- log_event('home'); return render_template('home.html',sidebar=nav())
+ log_event('home'); return render_template('home.html',sidebar=nav(), page_theme='dark')
 
 @app.get('/services')
 def services():
- log_event('services'); return render_template('services.html',sidebar=nav())
+ log_event('services'); return render_template('services.html',sidebar=nav(), page_theme=(actor()['theme'] if actor() else 'light'))
+
+@app.get('/qr')
+def qr_page():
+ log_event('qr'); return render_template('qr.html',sidebar=nav(),page_theme='light')
 
 @app.route('/account/register',methods=['GET','POST'])
 def register():
@@ -104,7 +111,7 @@ def register():
   elif q('SELECT id FROM accounts WHERE username=?',(username,),True): err='That username is already in use.'
   else:
    db().execute('INSERT INTO accounts(name,username,password_hash,role,phone,created_at) VALUES(?,?,?,?,?,?)',(name,username,generate_password_hash(pw),'customer',phone,now())); db().commit(); a=q('SELECT * FROM accounts WHERE username=?',(username,),True); session['account_id']=a['id']; return redirect(url_for('services'))
- return render_template('register.html',sidebar=nav(),error=err)
+ return render_template('register.html',sidebar=nav(),error=err,page_theme='light')
 
 @app.route('/login',methods=['GET','POST'])
 def login():
@@ -117,12 +124,23 @@ def login():
    if a['role']=='partner': return redirect(SERVICE_PATHS.get(a['service'],'/services'))
    return redirect(next_url if next_url.startswith('/') else '/services')
   err='The name/username or password is not correct.'
- return render_template('login.html',sidebar=nav(),error=err)
+ return render_template('login.html',sidebar=nav(),error=err,page_theme='light')
 
 @app.get('/partner-login')
 def partner_login(): return redirect(url_for('login'))
 @app.get('/logout')
 def logout(): session.clear(); return redirect(url_for('home'))
+
+@app.route('/settings',methods=['GET','POST'])
+@login_required('customer')
+def settings():
+ a=actor(); allowed={'light','cream','mint','sky'}; msg=None; err=None
+ if request.method=='POST':
+  theme=request.form.get('theme','light')
+  if theme not in allowed: err='Choose a valid appearance.'
+  else:
+   db().execute('UPDATE accounts SET theme=? WHERE id=?',(theme,a['id'])); db().commit(); msg='Appearance updated.'; a=actor()
+ return render_template('settings.html',sidebar=nav(),account=a,error=err,success=msg)
 
 @app.route('/account',methods=['GET','POST'])
 @login_required('customer')
@@ -133,7 +151,7 @@ def account_page():
   if not name: err='Name is required.'
   else:
    db().execute('UPDATE accounts SET name=?,phone=? WHERE id=?',(name,phone,a['id'])); db().commit(); msg='Account updated.'; a=actor()
- return render_template('account.html',sidebar=nav(),account=a,error=err,success=msg)
+ return render_template('account.html',sidebar=nav(),account=a,error=err,success=msg,page_theme=a['theme'])
 
 @app.post('/api/app-rating')
 @login_required('customer')
@@ -178,7 +196,7 @@ def help_page():
 def customer_service(service):
  if service not in SERVICES: abort(404)
  log_event('service',service)
- return render_template('service.html',sidebar=nav(),service=service,service_name=SERVICES[service])
+ return render_template('service.html',sidebar=nav(),service=service,service_name=SERVICES[service],page_theme=(actor()['theme'] if actor() else 'light'))
 
 # Provider entry points are the only public provider links in V1.
 @app.route('/O-Ride',methods=['GET'])
