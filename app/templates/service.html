@@ -3,7 +3,7 @@
 {% block content %}
 <div class="booking-page" id="servicesApp">
 <section class="booking-panel">
-  <div class="section-title" style="margin-bottom:2px"><div><div class="kicker">O</div><h1>Where are you going?</h1><div class="route-note">Choose a service and destination.</div></div><a class="btn" href="/qr">O QR</a></div>
+  <div class="section-title" style="margin-bottom:2px"><div><div class="kicker">O</div><h1>Where are you going?</h1><div class="route-note">Your pickup is automatic. Choose a service and enter where you want to go.</div></div><a class="btn" href="/qr">O QR</a></div>
   <div class="service-tabs" id="serviceTabs">
     <button class="service-tab ride-accent" data-service="ride" type="button"><span class="tab-ico"><svg viewBox="0 0 64 64"><circle cx="18" cy="48" r="7"/><circle cx="48" cy="48" r="7"/><path d="M24 48h17l-6-20h-9l-8 20M28 28l5-8h9M39 20l5 8"/></svg></span><b>O-Ride</b><small>Bike</small></button>
     <button class="service-tab drive-accent" data-service="drive" type="button"><span class="tab-ico"><svg viewBox="0 0 64 64"><path d="M12 40l5-15h30l5 15M18 25l5-7h18l5 7M17 46h30"/><circle cx="21" cy="44" r="4"/><circle cx="43" cy="44" r="4"/></svg></span><b>O-Drive</b><small>Car</small></button>
@@ -22,7 +22,7 @@
   </div>
   <div class="card request-live" id="tripCard"><div class="trip-state"><div><div class="kicker">Your trip</div><h2 id="tripTitle">Finding a partner</h2></div><span class="badge status-orange" id="tripBadge"><span class="dot"></span>WAITING</span></div><div class="trip-driver" id="driverSummary" style="margin-top:10px"></div><div class="route-note" id="tripRouteNote" style="margin-top:9px"></div></div>
 </section>
-<section class="card booking-map-card" id="mapCard"><div id="map" class="mapbox"></div><div id="mapOverlay" class="map-overlay-card"><div class="map-legend"><span class="badge status-orange"><span class="dot"></span>Available</span><span class="badge status-green"><span class="dot"></span>Coming to you</span><span class="badge status-blue"><span class="dot"></span>On trip</span></div><div class="route-note" id="mapHint" style="margin-top:6px">Map</div></div></section>
+<section class="card booking-map-card" id="mapCard"><div id="map" class="mapbox"></div><div id="mapOverlay" class="map-overlay-card"><div class="map-legend"><span class="badge status-orange"><span class="dot"></span>Available</span><span class="badge status-green"><span class="dot"></span>Coming to you</span><span class="badge status-blue"><span class="dot"></span>On trip</span></div><div class="route-note" id="mapHint" style="margin-top:6px">Allow location to see your position and nearby O partners.</div></div></section>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -37,7 +37,7 @@ function setMarker(kind,lat,lon,label){const old=kind==='pickup'?pickupMarker:de
 function clearPartners(){partnerMarkers.forEach(x=>x.remove());partnerMarkers=[]}
 function makePartnerMarker(p){const col=clr(p.status||'orange');const m=L.circleMarker([p.lat,p.lon],{radius:9,color:col,fillColor:col,fillOpacity:.95,weight:3}).addTo(map);m.on('click',()=>showPartnerTea(p.id,[p.lat,p.lon]));return m}
 function updatePickup(lat,lon,name='Current location'){$('pickupLat').value=lat;$('pickupLon').value=lon;$('pickupName').value=name;$('pickupDisplay').textContent=name;setMarker('pickup',lat,lon,name);map.setView([lat,lon],14);if(SERVICE)loadNearby();if($('destLat').value)calcRoute()}
-function locate(){if(!navigator.geolocation){$('pickupDisplay').textContent='Location unavailable';return}navigator.geolocation.getCurrentPosition(p=>updatePickup(p.coords.latitude,p.coords.longitude),()=>{$('pickupDisplay').textContent='Location permission needed';$('pickupHint').textContent='Change pickup'},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
+function locate(){if(!navigator.geolocation){$('pickupDisplay').textContent='Location unavailable';return}navigator.geolocation.getCurrentPosition(p=>updatePickup(p.coords.latitude,p.coords.longitude),()=>{$('pickupDisplay').textContent='Location permission needed';$('pickupHint').textContent='Use Change to set a pickup manually.'},{enableHighAccuracy:true,timeout:10000,maximumAge:30000})}
 $('changePickup').onclick=()=>{$('pickupEdit').style.display=$('pickupEdit').style.display==='none'?'block':'none'};
 $('pickupOnMap').onclick=()=>{chooseMode='pickup';$('mapHint').textContent='Tap the map to move your pickup point.'};$('useMyLocationAgain').onclick=locate;
 async function reverse(lat,lon){try{const r=await fetch(`/api/geocode/search?q=${encodeURIComponent(lat+','+lon)}`);const d=await r.json();return d[0]?.name||'Map location'}catch(e){return 'Map location'}}
