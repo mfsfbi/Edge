@@ -312,7 +312,7 @@ def geocode_search():
     q=(request.args.get('q') or '').strip()
     if not q: return jsonify(items=[])
     try:
-        rows=nominatim_json('/search?format=jsonv2&limit=1&q='+urllib.parse.quote(q))
+        rows=nominatim_json('/search?format=jsonv2&limit=5&addressdetails=1&q='+urllib.parse.quote(q))
         return jsonify(items=[{'lat':x.get('lat'),'lng':x.get('lon'),'name':x.get('display_name','')} for x in rows])
     except Exception:
         return jsonify(items=[])
@@ -361,7 +361,14 @@ def client_error():
 def service_page(service):
     if service not in SERVICES: return 'Not found',404
     upsert_visitor({})
-    return render_template('service.html',service=service,name=SERVICES[service],user=current_user())
+    u=current_user() or get_guest_user()
+    c=get_db()
+    recent_successes=c.execute(
+        "SELECT id,pickup,destination,fare,completed_at FROM requests WHERE customer_id=? AND service=? AND status='completed' ORDER BY completed_at DESC, id DESC LIMIT 4",
+        (u['id'],service)
+    ).fetchall()
+    c.close()
+    return render_template('service.html',service=service,name=SERVICES[service],user=current_user(),recent_successes=recent_successes)
 
 @app.route('/login',methods=['GET','POST'])
 def login():
