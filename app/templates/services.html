@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}O Services{% endblock %}
+{% block top_title %}O Services{% endblock %}
+{% block content %}
+<section class="services-page">
+  <div class="services-center">
+    <div class="o-mark-main" style="font-size:120px;margin-bottom:22px">O</div>
+    <div class="services-title">O Services</div>
+    <div class="service-launcher">
+      <a class="service-button ride" href="/service/bike"><span>O-Ride</span></a>
+      <a class="service-button drive" href="/service/ride"><span>O-Drive</span></a>
+      <a class="service-button movers" href="/service/mover"><span>O-Movers</span></a>
+      <a class="service-button travels" href="{{ otravel_url }}"><span>O-Travels</span></a>
+    </div>
+    <div class="home-nav-actions"><a class="btn small" href="/qr">Get O QR</a>{% if user and user['role']=='customer' %}<a class="btn small" href="/dashboard">My O</a>{% endif %}</div>
+    <div class="qr-card card" style="max-width:520px;margin:20px auto 0;text-align:left"><img src="/qr" alt="O share QR"><div><strong>Share O</strong><div class="small" style="margin-top:5px">Scan this code to open O.</div></div></div>
+  </div>
+</section>
+{% endblock %}

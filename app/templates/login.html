@@ -1,1 +1,12 @@
-{% extends 'base.html' %}{% block title %}Log in — O{% endblock %}{% block content %}<div style="max-width:470px;margin:30px auto" class="card"><h1>Log in</h1>{% if error %}<div class="notice">{{error}}</div>{% endif %}<form class="form" method="post"><input type="hidden" name="next" value="{{next or ''}}"><input name="phone" placeholder="Phone" required><input name="password" type="password" placeholder="Password" required><button class="btn primary">Log in</button></form><p class="small">New here? <a href="/join" style="text-decoration:underline">Join O</a>.</p></div>{% endblock %}
+{% extends 'base.html' %}{% block title %}Log in — O{% endblock %}{% block top_title %}O{% endblock %}{% block content %}
+<div style="max-width:470px;margin:38px auto" class="card">
+  <div class="o-mark-main" style="font-size:110px;margin:15px 0 20px;text-align:center">O</div>
+  <h1 style="margin-bottom:8px">{% if provider %}{{ provider_name }} partner login{% else %}Log in{% endif %}</h1>
+  {% if error %}<div class="notice" style="margin-bottom:12px">{{error}}</div>{% endif %}
+  <form class="form" method="post"><input type="hidden" name="next" value="{{next or ''}}">
+    <label>Username<input name="phone" autocomplete="username" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary">Log in</button>
+  </form>
+  {% if provider %}<p class="small" style="margin-top:15px">Partner accounts are provided by O.</p>{% endif %}
+</div>{% endblock %}

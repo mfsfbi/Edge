@@ -1,22 +1,23 @@
 # O Mobility
 
-Mobile-first Flask PWA for O-Ride (boda), O-Drive (cars), O-Movers, and O-Travels. O-Travels links to the existing OTravel site.
+O is a mobile-first PWA for:
+- O-Ride — bike passenger service
+- O-Drive — car service
+- O-Movers — moving service
+- O-Travels — links to https://otravel-bleg.onrender.com/
 
-## Render variables
-Only these two are required:
+## Render
+Only two environment variables are required:
 
 - `USER_NAME`
 - `PASSWORD`
 
-The secret admin entry is `/promise212324`.
+Admin entry: `/promise212324`
+Provider entries:
+- `/O-Rider` — O-Ride partners
+- `/O-Drive` — O-Drive partners
+- `/O-Movers` — O-Movers partners
 
-Use a persistent disk mounted at `/var/data` for production data retention.
+Customers use `/` then `/services` and the public service pages. Provider accounts are created by Admin; there is no public provider self-registration.
 
-## Public experience
-Visitors can browse anonymously. Pickup can use device location or a searched place; destinations can be searched or selected on the map. The fare estimate appears before requesting.
-
-## PWA
-The app includes root service-worker scope, installable PNG icons, an install prompt when the browser supports it, and a clear fallback instruction for iOS/unsupported browsers.
-
-## Admin
-The control room handles partner verification/deactivation, fares, requests, live partner locations, visitor context, complaints, ratings, audits, and backups. Operational records are retained rather than hard-deleted.
+`render.yaml` includes a persistent disk at `/var/data` for production data retention. On Render, use a compatible persistent-disk service plan when you need data to survive redeploys.

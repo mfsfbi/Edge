@@ -60,6 +60,7 @@ def init_db():
     PRAGMA journal_mode=WAL;
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL,
+      username TEXT UNIQUE,
       email TEXT, password_hash TEXT, active INTEGER NOT NULL DEFAULT 1, verified INTEGER NOT NULL DEFAULT 0,
       is_guest INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, last_seen TEXT
     );
@@ -120,6 +121,10 @@ def init_db():
     # Lightweight migrations for databases created by earlier O versions.
     cols={r['name'] for r in c.execute('PRAGMA table_info(users)').fetchall()}
     if 'is_guest' not in cols: c.execute('ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0')
+    if 'username' not in cols:
+        c.execute('ALTER TABLE users ADD COLUMN username TEXT')
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL")
+        c.execute('UPDATE users SET username=phone WHERE username IS NULL')
     visitor_cols={r['name'] for r in c.execute('PRAGMA table_info(visitors)').fetchall()}
     if 'location_label' not in visitor_cols: c.execute('ALTER TABLE visitors ADD COLUMN location_label TEXT')
     req_cols={r['name'] for r in c.execute('PRAGMA table_info(requests)').fetchall()}
@@ -133,9 +138,9 @@ def init_db():
     # Keep admin credentials sourced from Render variables USER_NAME / PASSWORD.
     admin_row=c.execute("SELECT id FROM users WHERE role='admin' LIMIT 1").fetchone()
     if not admin_row:
-        c.execute("INSERT INTO users(role,name,phone,password_hash,active,verified,created_at) VALUES('admin',?,?,?,1,1,?)",('O Admin',ADMIN_USERNAME,generate_password_hash(ADMIN_PASSWORD),now()))
+        c.execute("INSERT INTO users(role,name,phone,username,password_hash,active,verified,created_at) VALUES('admin',?,?,?,?,1,1,?)",('O Admin',ADMIN_USERNAME,ADMIN_USERNAME,generate_password_hash(ADMIN_PASSWORD),now()))
     else:
-        c.execute("UPDATE users SET phone=?, password_hash=?, active=1, verified=1 WHERE id=?",(ADMIN_USERNAME,generate_password_hash(ADMIN_PASSWORD),admin_row['id']))
+        c.execute("UPDATE users SET phone=?, username=?, password_hash=?, active=1, verified=1 WHERE id=?",(ADMIN_USERNAME,ADMIN_USERNAME,generate_password_hash(ADMIN_PASSWORD),admin_row['id']))
     c.commit(); c.close()
 init_db()
 
@@ -256,9 +261,9 @@ def mask_phone(phone):
 @app.after_request
 def security_headers(resp):
     resp.headers['X-Content-Type-Options']='nosniff'; resp.headers['X-Frame-Options']='SAMEORIGIN'; resp.headers['Referrer-Policy']='strict-origin-when-cross-origin'
-    if resp.status_code >= 500:
+    if resp.status_code >= 500 or (resp.status_code in (404,405) and not request.path.startswith('/static/') and request.path not in ('/admin',)):
         try:
-            c=get_db(); c.execute('INSERT INTO app_errors(source,severity,route,message,details,user_id,visitor_token,created_at) VALUES(?,?,?,?,?,?,?,?)',('server','error',request.path,f'HTTP {resp.status_code}',request.method,current_user()['id'] if current_user() else None,session.get('visitor_token'),now())); c.commit(); c.close()
+            c=get_db(); c.execute('INSERT INTO app_errors(source,severity,route,message,details,user_id,visitor_token,created_at) VALUES(?,?,?,?,?,?,?,?)',('server','error' if resp.status_code>=500 else 'warning',request.path,f'HTTP {resp.status_code}',request.method,current_user()['id'] if current_user() else None,session.get('visitor_token'),now())); c.commit(); c.close()
         except Exception: pass
     return resp
 
@@ -269,7 +274,7 @@ def health(): return jsonify(ok=True, service='O Mobility', time=now())
 def robots(): return app.response_class('User-agent: *\nAllow: /\nSitemap: '+url_for('sitemap',_external=True)+'\n',mimetype='text/plain')
 @app.route('/sitemap.xml')
 def sitemap():
-    urls=[url_for('home',_external=True),url_for('service_page',service='bike',_external=True),url_for('service_page',service='ride',_external=True),url_for('service_page',service='mover',_external=True)]
+    urls=[url_for('home',_external=True),url_for('services_page',_external=True),url_for('service_page',service='bike',_external=True),url_for('service_page',service='ride',_external=True),url_for('service_page',service='mover',_external=True),url_for('provider_ride',_external=True),url_for('provider_drive',_external=True),url_for('provider_movers',_external=True)]
     return app.response_class('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{u}</loc></url>' for u in urls)+'</urlset>',mimetype='application/xml')
 
 @app.route('/sw.js')
@@ -291,6 +296,11 @@ def pulse_receiver():
 def home():
     upsert_visitor({})
     return render_template('home.html',otravel_url='https://otravel-bleg.onrender.com/',user=current_user())
+
+@app.route('/services')
+def services_page():
+    upsert_visitor({'service': ''})
+    return render_template('services.html',otravel_url='https://otravel-bleg.onrender.com/',user=current_user())
 
 @app.route('/qr')
 def qr_code():
@@ -377,13 +387,23 @@ def login():
     upsert_visitor({})
     if request.method=='POST':
         phone=request.form.get('phone','').strip(); pwd=request.form.get('password','')
-        c=get_db(); u=c.execute('SELECT * FROM users WHERE phone=?',(phone,)).fetchone(); c.close()
+        c=get_db(); u=c.execute('SELECT * FROM users WHERE phone=? OR username=? LIMIT 1',(phone,phone)).fetchone(); c.close()
         if u and u['active'] and u['password_hash'] and check_password_hash(u['password_hash'],pwd):
             session['uid']=u['id']; audit('login','user',u['id'],actor_id=u['id']); nxt=request.form.get('next') or request.args.get('next') or ''
             if nxt.startswith('/') and not nxt.startswith('//') and nxt != '/admin': return redirect(nxt)
             return redirect(url_for('dashboard'))
-        return render_template('login.html',error='Invalid credentials or inactive account.',next=request.form.get('next') or request.args.get('next',''))
-    return render_template('login.html',error=None,next=request.args.get('next',''))
+        nxt=request.form.get('next') or request.args.get('next',''); prov=bool(request.args.get('provider')) or any(x in nxt for x in ('/O-Rider','/O-Drive','/O-Movers')); pname='O Partner'
+        if '/O-Rider' in nxt: pname='O-Ride'
+        elif '/O-Drive' in nxt: pname='O-Drive'
+        elif '/O-Movers' in nxt: pname='O-Movers'
+        return render_template('login.html',error='Invalid credentials or inactive account.',next=nxt,provider=prov,provider_name=pname)
+    nxt=request.args.get('next','')
+    prov=bool(request.args.get('provider')) or ('/O-Rider' in nxt or '/O-Drive' in nxt or '/O-Movers' in nxt)
+    provider_name='O Partner'
+    if '/O-Rider' in nxt: provider_name='O-Ride'
+    elif '/O-Drive' in nxt: provider_name='O-Drive'
+    elif '/O-Movers' in nxt: provider_name='O-Movers'
+    return render_template('login.html',error=None,next=nxt,provider=prov,provider_name=provider_name)
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('home'))
 @app.route('/dashboard')
@@ -398,21 +418,7 @@ def dashboard():
 
 @app.route('/join',methods=['GET','POST'])
 def join():
-    upsert_visitor({})
-    if request.method=='POST':
-        role=request.form.get('role','customer'); name=request.form.get('name','').strip(); phone=request.form.get('phone','').strip(); password=request.form.get('password','')
-        if role not in ('customer','driver') or not name or not phone or len(password)<6: return render_template('join.html',error='Please complete the form. Password must be at least 6 characters.')
-        c=get_db()
-        try:
-            cur=c.execute('INSERT INTO users(role,name,phone,password_hash,active,verified,created_at) VALUES(?,?,?,?,1,0,?)',(role,name,phone,generate_password_hash(password),now())); uid=cur.lastrowid
-            if role=='driver':
-                service=request.form.get('service','bike') if request.form.get('service') in SERVICES else 'bike'
-                code='O'+secrets.token_hex(3).upper(); c.execute('INSERT INTO drivers(user_id,service,vehicle_label,plate,license_no,joined_code) VALUES(?,?,?,?,?,?)',(uid,service,request.form.get('vehicle_label','').strip(),request.form.get('plate','').strip(),request.form.get('license_no','').strip(),code))
-            c.commit(); audit('signup','user',uid,f'role={role}',uid); c.close()
-            return render_template('join_success.html', role=role)
-        except sqlite3.IntegrityError:
-            c.rollback(); c.close(); return render_template('join.html',error='That phone number is already registered.')
-    return render_template('join.html',error=None)
+    return redirect(url_for('home'))
 
 @app.route('/api/estimate',methods=['POST'])
 def api_estimate():
@@ -496,7 +502,7 @@ def provider_entry(service):
     u=current_user()
     target=PROVIDER_PATHS[service]
     if not u:
-        return redirect(url_for('login', next=target))
+        return redirect(url_for('login', next=target+'?provider=1'))
     if u['role']!='driver':
         abort(404)
     c=get_db(); d=c.execute('SELECT d.*,u.name,u.phone,u.verified,u.active FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(u['id'],)).fetchone(); c.close()
@@ -637,11 +643,31 @@ def admin():
     customers=c.execute("SELECT id,name,phone,active,is_guest,created_at,last_seen FROM users WHERE role='customer' ORDER BY id DESC LIMIT 150").fetchall()
     requests=c.execute("SELECT r.*,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id ORDER BY r.id DESC LIMIT 100").fetchall()
     complaints=c.execute("SELECT c.*,u.name FROM complaints c JOIN users u ON u.id=c.user_id ORDER BY c.id DESC LIMIT 50").fetchall()
-    visitors=c.execute("SELECT v.*,u.name,u.phone FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 150").fetchall()
+    visitors=c.execute("SELECT v.*,u.name,u.phone,u.role,u.is_guest, CASE WHEN u.role='driver' THEN 'Partner' WHEN u.role='customer' AND u.is_guest=1 THEN 'Guest customer' WHEN u.role='customer' THEN 'Customer' WHEN u.role='admin' THEN 'Admin' ELSE 'Visitor' END person_type FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 150").fetchall()
     errors=c.execute("SELECT e.*,u.name FROM app_errors e LEFT JOIN users u ON u.id=e.user_id WHERE e.resolved=0 ORDER BY e.id DESC LIMIT 100").fetchall()
     settings={k:setting(k) for k in ['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url']}
     c.close()
     return render_template('admin.html',stats=stats,drivers=drivers,customers=customers,requests=requests,complaints=complaints,settings=settings,admin_path=ADMIN_PATH,visitors=visitors,errors=errors,service_interest=service_interest,service_labels=SERVICES)
+
+@app.route('/promise212324/partner/add',methods=['POST'])
+@admin_required
+def admin_partner_add():
+    service=request.form.get('service','bike')
+    if service not in SERVICES: return abort(400)
+    name=request.form.get('name','').strip(); username=request.form.get('username','').strip(); password=request.form.get('password',''); phone=request.form.get('phone','').strip()
+    vehicle=request.form.get('vehicle_label','').strip(); plate=request.form.get('plate','').strip(); license_no=request.form.get('license_no','').strip()
+    if not name or not username or len(password)<6 or not phone:
+        return redirect(url_for('admin',msg='Complete partner name, username, phone and a 6+ character password.'))
+    c=get_db()
+    try:
+        cur=c.execute("INSERT INTO users(role,name,phone,username,password_hash,active,verified,created_at,last_seen) VALUES('driver',?,?,?,?,1,1,?,?)",(name,phone,username,generate_password_hash(password),now(),now()))
+        uid=cur.lastrowid
+        code='O'+secrets.token_hex(3).upper()
+        c.execute("INSERT INTO drivers(user_id,service,vehicle_label,plate,license_no,status,joined_code) VALUES(?,?,?,?,?,'offline',?)",(uid,service,vehicle,plate,license_no,code))
+        c.commit(); audit('partner_created','user',uid,f'service={service};username={username}',current_user()['id'])
+    except sqlite3.IntegrityError:
+        c.rollback(); c.close(); return redirect(url_for('admin',msg='That username or phone is already in use.'))
+    c.close(); return redirect(url_for('admin',msg=f'{SERVICES[service]} partner created.'))
 
 @app.route('/promise212324/driver/<int:uid>/action',methods=['POST'])
 @admin_required
