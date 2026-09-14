@@ -1,12 +1,1 @@
-{% extends 'base.html' %}{% block title %}Log in — O{% endblock %}{% block top_title %}O{% endblock %}{% block content %}
-<div style="max-width:470px;margin:38px auto" class="card">
-  <div class="o-mark-main" style="font-size:110px;margin:15px 0 20px;text-align:center">O</div>
-  <h1 style="margin-bottom:8px">{% if provider %}{{ provider_name }} dashboard{% else %}Log in{% endif %}</h1>
-  {% if error %}<div class="notice" style="margin-bottom:12px">{{error}}</div>{% endif %}
-  <form class="form" method="post"><input type="hidden" name="next" value="{{next or ''}}">
-    <label>Username<input name="phone" autocomplete="username" required></label>
-    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-    <button class="btn primary">Log in</button>
-  </form>
-  {% if provider %}<p class="small" style="margin-top:15px">Log in with the username and password given to you by O Admin.</p>{% endif %}
-</div>{% endblock %}
+{% extends 'base.html' %}{% block content %}<div style="max-width:480px;margin:40px auto"><div class="card"><div class="kicker">O Access</div><h1>Sign in</h1><p class="muted">Customers and O partners use the same name/username + password here.</p>{% if error %}<div class="notice" style="border-color:#63323d;margin:12px 0">{{error}}</div>{% endif %}<form class="form" method="post"><div><div class="label">Name / Username</div><input class="input" name="username" required autocomplete="username"></div><div><div class="label">Password</div><input class="input" type="password" name="password" required autocomplete="current-password"></div><button class="btn primary">Sign in</button></form><div style="margin-top:14px" class="muted">New customer? <a href="/account/register" style="text-decoration:underline">Create an account</a></div></div></div>{% endblock %}

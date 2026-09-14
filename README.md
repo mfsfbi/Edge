@@ -1,37 +1,21 @@
-# O Mobility — V11 Dashboard Routes
+# O-System V1
 
-This build makes the provider entry URLs explicit and versioned:
+Clean rebuild of O Mobility for customer, partner and admin operations.
 
-- /O-Ride
-- /O-Drive
-- /O-drive
-- /O-Movers
-- /O-Mover
-- /o-movers
-
-Unauthenticated providers are sent to the provider login and then returned to the correct service dashboard after successful login.
-
-## Deployment check
-
-After deploying, open:
-
-`/health`
-
-It must return JSON containing:
-
-`"version": "V11-DASHBOARD-ROUTES"`
-
-and the route list containing `/O-Ride`, `/O-Drive`, and `/O-Movers`.
-
-If `/health` still shows an older version, Render is running an older commit/package and the provider-route fix has not been deployed.
+## Entry points
+- `/` customer home
+- `/services` customer service selection
+- `/account/register` customer registration
+- `/login` universal customer/partner login
+- `/partner-login` partner login entry
+- `/O-Ride` O-Ride partner login/dashboard entry
+- `/O-Drive` O-Drive partner login/dashboard entry
+- `/O-Movers` O-Movers partner login/dashboard entry
+- `/promise212324` admin login/control room
 
 ## Render
-
-Keep the start command:
-
-`gunicorn --workers 2 --threads 4 --timeout 120 app:app`
-
-Required environment variables are only:
-
+Set exactly these secret environment variables:
 - `USER_NAME`
 - `PASSWORD`
+
+The service includes a 1 GB persistent disk at `/var/data` for SQLite data.

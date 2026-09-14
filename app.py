@@ -1,781 +1,380 @@
-from __future__ import annotations
-import json, math, os, secrets, sqlite3, shutil, uuid, io, re, urllib.parse, urllib.request
-from datetime import datetime, timezone
+import os, sqlite3, math, json, urllib.parse, urllib.request, secrets
 from functools import wraps
-from pathlib import Path
-import hashlib
+from datetime import datetime, timezone
+from flask import Flask, g, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
-import qrcode
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for, send_file, abort
 
-BASE_DIR = Path(__file__).resolve().parent
+app=Flask(__name__, template_folder='app/templates', static_folder='app/static')
+ADMIN_PATH='/promise212324'
+ADMIN_USER=os.environ.get('USER_NAME','admin')
+ADMIN_PASS=os.environ.get('PASSWORD','change-me')
+app.secret_key=secrets.token_hex(32) if not (os.environ.get('USER_NAME') and os.environ.get('PASSWORD')) else generate_password_hash(ADMIN_USER+'|'+ADMIN_PASS)[:64]
 
-def choose_data_dir():
-    # O only needs USER_NAME and PASSWORD in Render. Storage location is an
-    # implementation detail: use the persistent Render disk when available,
-    # otherwise fall back to a writable local instance directory.
-    candidates = [Path('/var/data'), BASE_DIR / 'instance']
-    last_error = None
-    for candidate in candidates:
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            probe = candidate / '.write-test'
-            probe.write_text('ok', encoding='utf-8')
-            probe.unlink(missing_ok=True)
-            return candidate
-        except (OSError, PermissionError) as exc:
-            last_error = exc
-            continue
-    raise RuntimeError(f'No writable data directory available: {last_error}')
+BASE=os.path.dirname(os.path.abspath(__file__))
+DATA='/var/data' if os.path.isdir('/var/data') and os.access('/var/data',os.W_OK) else os.path.join(BASE,'instance')
+os.makedirs(DATA,exist_ok=True)
+DB=os.path.join(DATA,'o_system_v1.db')
+SERVICES={'ride':'O-Ride','drive':'O-Drive','mover':'O-Movers'}
+SERVICE_PATHS={'ride':'/O-Ride','drive':'/O-Drive','mover':'/O-Movers'}
+SERVICE_ICONS={'ride':'🏍️','drive':'🚗','mover':'🚚','travel':'✈️'}
+SERVICE_COLORS={'ride':'gold','drive':'green','mover':'blue','travel':'primary'}
 
-DATA_DIR = choose_data_dir()
-DB_PATH = DATA_DIR / 'o.db'
-BACKUP_DIR = DATA_DIR / 'backups'
-BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+SCHEMA='''
+CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, service TEXT, phone TEXT, created_at TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS partners(id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER UNIQUE NOT NULL, service TEXT NOT NULL, vehicle TEXT, plate TEXT, licence TEXT, rating REAL NOT NULL DEFAULT 5.0, completed INTEGER NOT NULL DEFAULT 0, earnings REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'offline', lat REAL, lon REAL, last_seen TEXT, FOREIGN KEY(account_id) REFERENCES accounts(id));
+CREATE TABLE IF NOT EXISTS requests(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, guest_name TEXT, service TEXT NOT NULL, pickup_name TEXT, destination_name TEXT, pickup_lat REAL, pickup_lon REAL, dest_lat REAL, dest_lon REAL, fare REAL, payment TEXT, status TEXT NOT NULL DEFAULT 'requested', partner_id INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(customer_id) REFERENCES accounts(id), FOREIGN KEY(partner_id) REFERENCES partners(id));
+CREATE TABLE IF NOT EXISTS ratings(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, partner_id INTEGER, request_id INTEGER, app_rating INTEGER, partner_rating INTEGER, note TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS feedback(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, guest_name TEXT, kind TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, role TEXT, page TEXT, service TEXT, device TEXT, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+'''
 
-# Keep session signing out of Render environment variables for now. It is
-# deterministically derived from the two requested admin credentials, so the
-# app remains easy to deploy while sessions still use a non-human-readable key.
-ADMIN_USERNAME = (os.environ.get('USER_NAME') or 'admin').strip()
-ADMIN_PASSWORD = os.environ.get('PASSWORD') or 'ChangeMeNow!'
-SECRET_KEY = hashlib.sha256((ADMIN_USERNAME + '|' + ADMIN_PASSWORD + '|O-MOBILITY-SESSION-V1').encode('utf-8')).hexdigest()
-
-app = Flask(__name__, template_folder=str(BASE_DIR / 'app' / 'templates'), static_folder=str(BASE_DIR / 'app' / 'static'), static_url_path='/static')
-app.secret_key = SECRET_KEY
-app.config['O_BUILD_VERSION'] = 'V12-PROVIDER-ROUTES'
-app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')))
-ADMIN_PATH = 'promise212324'
-
-SERVICES = {'bike':'O-Ride','ride':'O-Drive','mover':'O-Movers'}
-PROVIDER_PATHS = {'bike':'/O-Ride','ride':'/O-Drive','mover':'/O-Movers'}
-PROVIDER_ALIASES = {'bike':'/O-Rider','ride':'/O-Drive','mover':'/O-Movers'}
-STATUS_COLORS = {'available':'orange','assigned':'green','enroute':'green','on_trip':'blue','offline':'gray'}
-
+def db():
+ if 'db' not in g:
+  g.db=sqlite3.connect(DB); g.db.row_factory=sqlite3.Row; g.db.executescript(SCHEMA); g.db.commit()
+ return g.db
+@app.teardown_appcontext
+def close_db(exc):
+ conn=g.pop('db',None)
+ if conn: conn.close()
 
 def now(): return datetime.now(timezone.utc).isoformat()
-def get_db():
-    c=sqlite3.connect(DB_PATH, timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA foreign_keys=ON'); return c
+def q(sql,args=(),one=False):
+ cur=db().execute(sql,args); rows=cur.fetchall(); return (rows[0] if rows else None) if one else rows
+def nav(role='customer',service=None):
+ if role=='admin':
+  return '''<nav><a class="navbtn active" href="/promise212324">Overview <span>⌂</span></a><div class="navsection"><h4>O Services</h4><a class="navbtn" href="/promise212324/service/ride">O-Ride <span>›</span></a><a class="navbtn" href="/promise212324/service/drive">O-Drive <span>›</span></a><a class="navbtn" href="/promise212324/service/mover">O-Movers <span>›</span></a></div><div class="navsection"><h4>Control</h4><a class="navbtn" href="/promise212324/inbox">Inbox <span>›</span></a><a class="navbtn" href="/promise212324/complaints">Complaints <span>›</span></a><a class="navbtn" href="/promise212324/partners">Partners <span>›</span></a><a class="navbtn" href="/promise212324/people">People & usage <span>›</span></a><a class="navbtn" href="/promise212324/simulate">Simulate <span>›</span></a><a class="navbtn" href="/promise212324/system">System <span>›</span></a></div></nav>'''
+ if role=='partner':
+  return f'''<nav><a class="navbtn active" href="{SERVICE_PATHS.get(service,'/')}">{SERVICES.get(service,service or 'Partner')} Dashboard <span>⌂</span></a><a class="navbtn" href="/partner/requests">Requests <span>›</span></a><a class="navbtn" href="/partner/earnings">Earnings <span>›</span></a><a class="navbtn" href="/partner/ratings">Ratings <span>›</span></a><a class="navbtn" href="/partner/help">Help <span>›</span></a><a class="navbtn" href="/logout">Sign out <span>↗</span></a></nav>'''
+ logged='''<nav><a class="navbtn active" href="/services">Services <span>⌂</span></a><a class="navbtn" href="/customer/trips">My trips <span>›</span></a><a class="navbtn" href="/customer/ratings">Ratings & feedback <span>›</span></a><a class="navbtn" href="/help">Help, concern or request <span>›</span></a><a class="navbtn" href="/logout">Sign out <span>↗</span></a></nav>'''
+ guest='''<nav><a class="navbtn active" href="/services">Services <span>⌂</span></a><a class="navbtn" href="/login">Sign in <span>›</span></a><a class="navbtn" href="/account/register">Create account <span>›</span></a><a class="navbtn" href="/help">Help, concern or request <span>›</span></a></nav>'''
+ return logged if session.get('account_id') else guest
 
-def init_db():
-    c=get_db()
-    c.executescript('''
-    PRAGMA journal_mode=WAL;
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY, role TEXT NOT NULL, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL,
-      username TEXT UNIQUE,
-      email TEXT, password_hash TEXT, active INTEGER NOT NULL DEFAULT 1, verified INTEGER NOT NULL DEFAULT 0,
-      is_guest INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, last_seen TEXT
-    );
-    CREATE TABLE IF NOT EXISTS drivers (
-      user_id INTEGER PRIMARY KEY REFERENCES users(id), service TEXT NOT NULL DEFAULT 'bike',
-      vehicle_label TEXT, plate TEXT, license_no TEXT, status TEXT NOT NULL DEFAULT 'offline',
-      lat REAL, lng REAL, rating REAL NOT NULL DEFAULT 5.0, jobs INTEGER NOT NULL DEFAULT 0,
-      joined_code TEXT UNIQUE, referral_count INTEGER NOT NULL DEFAULT 0, deactivated_reason TEXT
-    );
-    CREATE TABLE IF NOT EXISTS requests (
-      id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES users(id), service TEXT NOT NULL,
-      pickup TEXT NOT NULL, destination TEXT NOT NULL, pickup_lat REAL, pickup_lng REAL,
-      dest_lat REAL, dest_lng REAL, distance_km REAL NOT NULL DEFAULT 0, fare REAL NOT NULL DEFAULT 0,
-      customer_offer REAL, status TEXT NOT NULL DEFAULT 'searching', driver_id INTEGER REFERENCES users(id),
-      payment_method TEXT NOT NULL DEFAULT 'cash', payment_status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL, accepted_at TEXT, started_at TEXT, completed_at TEXT, cancelled_at TEXT,
-      cancel_reason TEXT, notes TEXT, contact_phone TEXT
-    );
-    CREATE TABLE IF NOT EXISTS ratings (
-      id INTEGER PRIMARY KEY, request_id INTEGER NOT NULL REFERENCES requests(id), customer_id INTEGER REFERENCES users(id),
-      driver_id INTEGER REFERENCES users(id), app_rating INTEGER, rider_rating INTEGER, comment TEXT, created_at TEXT NOT NULL,
-      UNIQUE(request_id)
-    );
-    CREATE TABLE IF NOT EXISTS complaints (
-      id INTEGER PRIMARY KEY, request_id INTEGER, user_id INTEGER NOT NULL REFERENCES users(id),
-      category TEXT NOT NULL, details TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', admin_note TEXT,
-      created_at TEXT NOT NULL, resolved_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), kind TEXT NOT NULL, title TEXT NOT NULL,
-      body TEXT NOT NULL, request_id INTEGER, read_at TEXT, created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS audits (
-      id INTEGER PRIMARY KEY, actor_id INTEGER, action TEXT NOT NULL, entity_type TEXT, entity_id INTEGER,
-      details TEXT, created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS visitors (
-      id INTEGER PRIMARY KEY, visitor_token TEXT UNIQUE NOT NULL, user_id INTEGER REFERENCES users(id),
-      ip_address TEXT, device_model TEXT, device_family TEXT, platform TEXT, platform_version TEXT,
-      browser_family TEXT, browser_version TEXT, is_mobile INTEGER DEFAULT 0, screen_width INTEGER, screen_height INTEGER,
-      lat REAL, lng REAL, accuracy REAL, location_updated_at TEXT, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS visit_events (
-      id INTEGER PRIMARY KEY, visitor_token TEXT NOT NULL, user_id INTEGER REFERENCES users(id),
-      path TEXT NOT NULL, service TEXT, role_hint TEXT, entered_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS pwa_installs (
-      id INTEGER PRIMARY KEY, visitor_token TEXT NOT NULL, user_id INTEGER REFERENCES users(id),
-      platform TEXT, device_model TEXT, installed_at TEXT NOT NULL, UNIQUE(visitor_token)
-    );
-    CREATE TABLE IF NOT EXISTS app_errors (
-      id INTEGER PRIMARY KEY, source TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'error',
-      route TEXT, message TEXT NOT NULL, details TEXT, user_id INTEGER REFERENCES users(id),
-      visitor_token TEXT, created_at TEXT NOT NULL, resolved INTEGER NOT NULL DEFAULT 0
-    );
-    ''')
-    # Lightweight migrations for databases created by earlier O versions.
-    cols={r['name'] for r in c.execute('PRAGMA table_info(users)').fetchall()}
-    if 'is_guest' not in cols: c.execute('ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0')
-    if 'username' not in cols:
-        c.execute('ALTER TABLE users ADD COLUMN username TEXT')
-        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL")
-        c.execute('UPDATE users SET username=phone WHERE username IS NULL')
-    visitor_cols={r['name'] for r in c.execute('PRAGMA table_info(visitors)').fetchall()}
-    if 'location_label' not in visitor_cols: c.execute('ALTER TABLE visitors ADD COLUMN location_label TEXT')
-    req_cols={r['name'] for r in c.execute('PRAGMA table_info(requests)').fetchall()}
-    if 'contact_phone' not in req_cols: c.execute('ALTER TABLE requests ADD COLUMN contact_phone TEXT')
-    defaults={
-      'bike_base':'55','bike_per_km':'18','ride_base':'110','ride_per_km':'42',
-      'mover_base':'600','mover_per_km':'60','mover_item_fee':'100','mover_helper_fee':'650','platform_commission':'10',
-      'otravel_url':'https://otravel-bleg.onrender.com/','support_phone':'','app_name':'O','simulate':'0'
-    }
-    for k,v in defaults.items(): c.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,v))
-    # Keep admin credentials sourced from Render variables USER_NAME / PASSWORD.
-    admin_row=c.execute("SELECT id FROM users WHERE role='admin' LIMIT 1").fetchone()
-    if not admin_row:
-        c.execute("INSERT INTO users(role,name,phone,username,password_hash,active,verified,created_at) VALUES('admin',?,?,?,?,1,1,?)",('O Admin',ADMIN_USERNAME,ADMIN_USERNAME,generate_password_hash(ADMIN_PASSWORD),now()))
-    else:
-        c.execute("UPDATE users SET phone=?, username=?, password_hash=?, active=1, verified=1 WHERE id=?",(ADMIN_USERNAME,ADMIN_USERNAME,generate_password_hash(ADMIN_PASSWORD),admin_row['id']))
-    c.commit(); c.close()
-init_db()
+def actor():
+ aid=session.get('account_id'); return q('SELECT * FROM accounts WHERE id=? AND active=1',(aid,),True) if aid else None
 
-def setting(key, default=''):
-    c=get_db(); r=c.execute('SELECT value FROM settings WHERE key=?',(key,)).fetchone(); c.close(); return r['value'] if r else default
+def log_event(page,service=None):
+ a=actor(); ua=request.headers.get('User-Agent','')[:120]
+ try: db().execute('INSERT INTO events(customer_id,role,page,service,device,created_at) VALUES(?,?,?,?,?,?)',(a['id'] if a else None,a['role'] if a else 'guest',page,service,ua,now())); db().commit()
+ except Exception: pass
 
-def audit(action, entity_type='', entity_id=None, details='', actor_id=None):
-    c=get_db(); c.execute('INSERT INTO audits(actor_id,action,entity_type,entity_id,details,created_at) VALUES(?,?,?,?,?,?)',(actor_id,action,entity_type,entity_id,details,now())); c.commit(); c.close()
-
-def notify(user_id, kind, title, body, request_id=None):
-    c=get_db(); c.execute('INSERT INTO notifications(user_id,kind,title,body,request_id,created_at) VALUES(?,?,?,?,?,?)',(user_id,kind,title,body,request_id,now())); c.commit(); c.close()
-
-def current_user():
-    uid=session.get('uid')
-    if not uid: return None
-    c=get_db(); u=c.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone(); c.close(); return u
-
-def has_guest_session():
-    gid=session.get('guest_uid')
-    if not gid: return False
-    c=get_db(); ok=bool(c.execute('SELECT 1 FROM users WHERE id=? AND is_guest=1 AND active=1',(gid,)).fetchone()); c.close(); return ok
-
-def login_required(fn):
-    @wraps(fn)
-    def w(*a,**kw):
-        if not current_user() and not has_guest_session(): return redirect(url_for('login', next=request.path))
-        return fn(*a,**kw)
-    return w
+def login_required(role=None):
+ def deco(fn):
+  @wraps(fn)
+  def inner(*args,**kwargs):
+   a=actor()
+   if not a: return redirect(url_for('login',next=request.path))
+   if role and a['role']!=role: abort(403)
+   return fn(*args,**kwargs)
+  return inner
+ return deco
 
 def admin_required(fn):
-    @wraps(fn)
-    def w(*a,**kw):
-        u=current_user()
-        if not u or u['role']!='admin': return redirect(url_for('admin_login'))
-        return fn(*a,**kw)
-    return w
+ @wraps(fn)
+ def inner(*args,**kwargs):
+  if not session.get('admin'): return redirect(url_for('admin_login',next=request.path))
+  return fn(*args,**kwargs)
+ return inner
 
-def haversine(a,b,c,d):
-    if None in (a,b,c,d): return 0.0
-    R=6371.0; p1=math.radians(a); p2=math.radians(c); dp=math.radians(c-a); dl=math.radians(d-b)
-    x=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
-    return R*2*math.atan2(math.sqrt(x), math.sqrt(1-x))
+def ensure_defaults():
+ db().execute("INSERT OR IGNORE INTO settings(key,value) VALUES('simulate','0')")
+ db().commit()
 
-def fare(service, km, items=0, helpers=0):
-    if service=='bike': return max(60, round(float(setting('bike_base','60')) + float(setting('bike_per_km','22'))*max(km,0), -1))
-    if service=='ride': return max(150, round(float(setting('ride_base','150')) + float(setting('ride_per_km','48'))*max(km,0), -1))
-    return max(700, round(float(setting('mover_base','700')) + float(setting('mover_per_km','70'))*max(km,0) + items*float(setting('mover_item_fee','120')) + helpers*float(setting('mover_helper_fee','700')), -1))
+@app.before_request
 
-def find_driver(service, lat, lng):
-    if lat is None or lng is None: return None
-    c=get_db()
-    rows=c.execute("SELECT d.*,u.name,u.phone FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.service=? AND u.active=1 AND u.verified=1 AND d.status='available' AND d.lat IS NOT NULL AND d.lng IS NOT NULL",(service,)).fetchall(); c.close()
-    ranked=sorted(rows,key=lambda r:haversine(lat,lng,r['lat'],r['lng']))
-    return ranked[0] if ranked else None
+def before(): db(); ensure_defaults()
 
-def client_ip():
-    forwarded=request.headers.get('X-Forwarded-For','').split(',')[0].strip()
-    return forwarded or request.remote_addr or ''
+@app.get('/health')
+def health(): return jsonify(ok=True,version='O-System V1')
 
-def browser_family(ua):
-    u=(ua or '').lower()
-    checks=[('Edge','edg/'),('Opera','opr/'),('Chrome','chrome/'),('Firefox','firefox/'),('Samsung Internet','samsungbrowser/'),('Safari','safari/')]
-    if 'crios/' in u: return 'Chrome iOS'
-    if 'fxios/' in u: return 'Firefox iOS'
-    for name, token in checks:
-        if token in u: return name
-    return 'Other'
-
-def platform_family(ua):
-    u=(ua or '').lower()
-    if 'windows' in u: return 'Windows'
-    if 'android' in u: return 'Android'
-    if 'iphone' in u or 'ipad' in u or 'ios' in u: return 'iOS'
-    if 'mac os' in u or 'macintosh' in u: return 'macOS'
-    if 'linux' in u: return 'Linux'
-    return 'Other'
-
-def upsert_visitor(data):
-    token=session.get('visitor_token') or secrets.token_urlsafe(24); session['visitor_token']=token
-    ua=request.headers.get('User-Agent','')
-    model=(data.get('device_model') or request.headers.get('Sec-CH-UA-Model') or '').strip()
-    platform=(data.get('platform') or request.headers.get('Sec-CH-UA-Platform') or platform_family(ua)).strip('" ')
-    browser=(data.get('browser_family') or browser_family(ua)).strip()
-    is_mobile=1 if bool(data.get('is_mobile')) or 'mobile' in ua.lower() else 0
-    path=str(data.get('path') or request.path or '/')[:300]
-    svc=(data.get('service') or '').strip()[:30] or None
-    role_hint=(data.get('role_hint') or ('customer' if current_user() and current_user()['role']=='customer' else ('provider' if current_user() and current_user()['role']=='driver' else 'visitor')))[:30]
-    c=get_db(); existing=c.execute('SELECT id FROM visitors WHERE visitor_token=?',(token,)).fetchone()
-    values=(client_ip(),model,data.get('device_family') or ('Phone' if is_mobile else 'Computer'),platform,data.get('platform_version') or '',browser,data.get('browser_version') or '',is_mobile,data.get('screen_width'),data.get('screen_height'),now())
-    uid=current_user()['id'] if current_user() else None
-    if existing:
-        c.execute("UPDATE visitors SET user_id=?,ip_address=?,device_model=COALESCE(NULLIF(?,''),device_model),device_family=?,platform=?,platform_version=?,browser_family=?,browser_version=?,is_mobile=?,screen_width=?,screen_height=?,last_seen=? WHERE id=?",(uid,)+values+(existing['id'],))
-    else:
-        c.execute("INSERT INTO visitors(visitor_token,user_id,ip_address,device_model,device_family,platform,platform_version,browser_family,browser_version,is_mobile,screen_width,screen_height,first_seen,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(token,uid,*values[:-1],values[-1],values[-1]))
-    c.execute('INSERT INTO visit_events(visitor_token,user_id,path,service,role_hint,entered_at) VALUES(?,?,?,?,?,?)',(token,uid,path,svc,role_hint,now()))
-    c.commit(); c.close();
-    return token
-
-def get_guest_user(contact_phone=''):
-    uid=session.get('guest_uid')
-    c=get_db()
-    if uid:
-        u=c.execute('SELECT * FROM users WHERE id=? AND is_guest=1',(uid,)).fetchone()
-        if u:
-            if contact_phone and u['phone'].startswith('guest-'):
-                try: c.execute('UPDATE users SET phone=? WHERE id=?',(contact_phone,u['id']))
-                except sqlite3.IntegrityError: pass
-                c.commit(); u=c.execute('SELECT * FROM users WHERE id=?',(u['id'],)).fetchone()
-            c.close(); return u
-    phone=(contact_phone.strip() if contact_phone else '') or ('guest-'+uuid.uuid4().hex)
-    c.execute("INSERT INTO users(role,name,phone,password_hash,active,verified,is_guest,created_at) VALUES('customer','Guest',?,?,1,0,1,?)",(phone,None,now()))
-    uid=c.execute('SELECT last_insert_rowid() x').fetchone()['x']; c.commit(); u=c.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone(); c.close(); session['guest_uid']=uid; return u
-
-def mask_phone(phone):
-    if not phone: return ''
-    return phone[:4]+'***'+phone[-2:]
-
-@app.after_request
-def security_headers(resp):
-    resp.headers['X-Content-Type-Options']='nosniff'; resp.headers['X-Frame-Options']='SAMEORIGIN'; resp.headers['Referrer-Policy']='strict-origin-when-cross-origin'
-    if resp.status_code >= 500 or (resp.status_code in (404,405) and not request.path.startswith('/static/') and request.path not in ('/admin',)):
-        try:
-            c=get_db(); c.execute('INSERT INTO app_errors(source,severity,route,message,details,user_id,visitor_token,created_at) VALUES(?,?,?,?,?,?,?,?)',('server','error' if resp.status_code>=500 else 'warning',request.path,f'HTTP {resp.status_code}',request.method,current_user()['id'] if current_user() else None,session.get('visitor_token'),now())); c.commit(); c.close()
-        except Exception: pass
-    return resp
-
-@app.route('/health')
-def health():
-    return jsonify(ok=True, service='O Mobility', version=app.config.get('O_BUILD_VERSION'), routes=['/O-Ride','/O-Drive','/O-Movers'], time=now())
-
-@app.route('/robots.txt')
-def robots(): return app.response_class('User-agent: *\nAllow: /\nSitemap: '+url_for('sitemap',_external=True)+'\n',mimetype='text/plain')
-@app.route('/sitemap.xml')
-def sitemap():
-    urls=[url_for('home',_external=True),url_for('services_page',_external=True),url_for('service_page',service='bike',_external=True),url_for('service_page',service='ride',_external=True),url_for('service_page',service='mover',_external=True),url_for('provider_ride',_external=True),url_for('provider_drive',_external=True),url_for('provider_movers',_external=True)]
-    return app.response_class('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{u}</loc></url>' for u in urls)+'</urlset>',mimetype='application/xml')
-
-@app.route('/sw.js')
-def root_service_worker():
-    # A root-scoped worker controls the whole O PWA, not only /static/.
-    return app.send_static_file('sw.js')
-
-@app.route('/favicon.ico')
-def favicon():
-    return app.send_static_file('logo.svg')
-
-@app.route('/pulse_receiver', methods=['POST'])
-def pulse_receiver():
-    # Compatibility endpoint for harmless uptime/pulse senders. O does not need
-    # the external pulse service for core operation.
-    return jsonify(ok=True)
-
-@app.route('/')
+@app.get('/')
 def home():
-    upsert_visitor({})
-    return render_template('home.html',otravel_url='https://otravel-bleg.onrender.com/',user=current_user())
+ log_event('home'); return render_template('home.html',sidebar=nav())
 
-@app.route('/services')
-def services_page():
-    upsert_visitor({'service': ''})
-    return render_template('services.html',otravel_url='https://otravel-bleg.onrender.com/',user=current_user())
+@app.get('/services')
+def services():
+ log_event('services'); return render_template('services.html',sidebar=nav())
 
-@app.route('/qr')
-def qr_code():
-    target=request.host_url.rstrip('/') + '/'
-    ref=(request.args.get('ref') or '').strip()
-    if ref: target += '?ref=' + ref
-    img=qrcode.make(target)
-    buf=io.BytesIO(); img.save(buf,format='PNG'); buf.seek(0)
-    return send_file(buf,mimetype='image/png',download_name='O-share.png')
-
-def nominatim_json(path):
-    url='https://nominatim.openstreetmap.org'+path
-    req=urllib.request.Request(url,headers={'User-Agent':'O-Mobility/1.0 (location search)'})
-    with urllib.request.urlopen(req,timeout=8) as r:
-        return json.loads(r.read().decode('utf-8'))
-
-@app.route('/api/geocode/search')
-def geocode_search():
-    q=(request.args.get('q') or '').strip()
-    if not q: return jsonify(items=[])
-    try:
-        rows=nominatim_json('/search?format=jsonv2&limit=5&addressdetails=1&q='+urllib.parse.quote(q))
-        return jsonify(items=[{'lat':x.get('lat'),'lng':x.get('lon'),'name':x.get('display_name','')} for x in rows])
-    except Exception:
-        return jsonify(items=[])
-
-@app.route('/api/geocode/reverse')
-def geocode_reverse():
-    try:
-        lat=float(request.args.get('lat')); lng=float(request.args.get('lng'))
-    except (TypeError,ValueError):
-        return jsonify(name='')
-    try:
-        x=nominatim_json('/reverse?format=jsonv2&lat='+urllib.parse.quote(str(lat))+'&lon='+urllib.parse.quote(str(lng)))
-        return jsonify(name=x.get('display_name',''))
-    except Exception:
-        return jsonify(name='')
-
-@app.route('/api/route')
-def api_route():
-    try:
-        start_lat=float(request.args.get('start_lat')); start_lng=float(request.args.get('start_lng'))
-        end_lat=float(request.args.get('end_lat')); end_lng=float(request.args.get('end_lng'))
-    except (TypeError,ValueError):
-        return jsonify(error='Invalid route coordinates.'),400
-    # Road-following route from OSRM. If the routing service is unavailable,
-    # the client falls back to the two endpoints so the map remains usable.
-    url=(
-        'https://router.project-osrm.org/route/v1/driving/'
-        f'{urllib.parse.quote(str(start_lng))},{urllib.parse.quote(str(start_lat))};'
-        f'{urllib.parse.quote(str(end_lng))},{urllib.parse.quote(str(end_lat))}'
-        '?overview=full&geometries=geojson'
-    )
-    try:
-        req=urllib.request.Request(url,headers={'User-Agent':'O-Mobility/1.0 (road routing)'})
-        with urllib.request.urlopen(req,timeout=10) as r:
-            payload=json.loads(r.read().decode('utf-8'))
-        routes=payload.get('routes') or []
-        if not routes: return jsonify(error='No road route found.'),404
-        route=routes[0]
-        return jsonify(distance_km=round(float(route.get('distance') or 0)/1000,3),duration_min=round(float(route.get('duration') or 0)/60,1),geometry=(route.get('geometry') or {}).get('coordinates',[]))
-    except Exception:
-        return jsonify(distance_km=0,duration_min=0,geometry=[],routing_available=False,error='Road routing temporarily unavailable.'),200
-
-@app.route('/api/visitor/context',methods=['POST'])
-def visitor_context():
-    d=request.get_json(silent=True) or {}
-    upsert_visitor(d)
-    # Store consented browser geolocation only; no location is guessed from the browser name.
-    if d.get('lat') is not None and d.get('lng') is not None:
-        try:
-            c=get_db(); token=session.get('visitor_token'); c.execute('UPDATE visitors SET lat=?,lng=?,accuracy=?,location_label=?,location_updated_at=?,last_seen=? WHERE visitor_token=?',(float(d['lat']),float(d['lng']),float(d.get('accuracy') or 0),str(d.get('location_label') or '')[:240],now(),now(),token)); c.commit(); c.close()
-        except (TypeError,ValueError): pass
-    return jsonify(ok=True)
-@app.route('/api/pwa/install',methods=['POST'])
-def pwa_install():
-    d=request.get_json(silent=True) or {}; token=session.get('visitor_token') or upsert_visitor(d)
-    c=get_db();
-    try:
-        c.execute('INSERT OR IGNORE INTO pwa_installs(visitor_token,user_id,platform,device_model,installed_at) VALUES(?,?,?,?,?)',(token,current_user()['id'] if current_user() else None,str(d.get('platform') or '')[:80],str(d.get('device_model') or '')[:120],now())); c.commit()
-    finally: c.close()
-    audit('pwa_install','visitor',None,details=f'platform={d.get("platform","")};model={d.get("device_model","")}',actor_id=current_user()['id'] if current_user() else None)
-    return jsonify(ok=True)
-
-@app.route('/api/client-error',methods=['POST'])
-def client_error():
-    d=request.get_json(silent=True) or {}; msg=str(d.get('message') or 'Client error')[:500]; details=str(d.get('details') or '')[:3000]
-    try:
-        c=get_db(); c.execute('INSERT INTO app_errors(source,severity,route,message,details,user_id,visitor_token,created_at) VALUES(?,?,?,?,?,?,?,?)',('browser',str(d.get('severity') or 'error')[:20],str(d.get('route') or request.path)[:300],msg,details,current_user()['id'] if current_user() else None,session.get('visitor_token'),now())); c.commit(); c.close()
-    except Exception: pass
-    return jsonify(ok=True)
-
-@app.route('/service/<service>')
-def service_page(service):
-    if service not in SERVICES: return 'Not found',404
-    upsert_visitor({})
-    u=current_user()
-    recent_successes=[]
-    if u and u['role']=='customer':
-        c=get_db()
-        recent_successes=c.execute(
-            "SELECT id,pickup,destination,fare,completed_at FROM requests WHERE customer_id=? AND service=? AND status='completed' ORDER BY completed_at DESC, id DESC LIMIT 4",
-            (u['id'],service)
-        ).fetchall()
-        c.close()
-    return render_template('service.html',service=service,name=SERVICES[service],user=current_user(),recent_successes=recent_successes)
+@app.route('/account/register',methods=['GET','POST'])
+def register():
+ err=''
+ if request.method=='POST':
+  name=request.form.get('name','').strip(); username=request.form.get('username','').strip().lower(); phone=request.form.get('phone','').strip(); pw=request.form.get('password','')
+  if not name or not username or len(pw)<6: err='Enter your name, username and a password of at least 6 characters.'
+  elif q('SELECT id FROM accounts WHERE username=?',(username,),True): err='That username is already in use.'
+  else:
+   db().execute('INSERT INTO accounts(name,username,password_hash,role,phone,created_at) VALUES(?,?,?,?,?,?)',(name,username,generate_password_hash(pw),'customer',phone,now())); db().commit(); a=q('SELECT * FROM accounts WHERE username=?',(username,),True); session['account_id']=a['id']; return redirect(url_for('services'))
+ return render_template('register.html',sidebar=nav(),error=err)
 
 @app.route('/login',methods=['GET','POST'])
 def login():
-    upsert_visitor({})
-    if request.method=='POST':
-        phone=request.form.get('phone','').strip(); pwd=request.form.get('password','')
-        c=get_db(); u=c.execute('SELECT * FROM users WHERE phone=? OR username=? LIMIT 1',(phone,phone)).fetchone(); c.close()
-        if u and u['active'] and u['password_hash'] and check_password_hash(u['password_hash'],pwd):
-            session['uid']=u['id']; audit('login','user',u['id'],actor_id=u['id']); nxt=request.form.get('next') or request.args.get('next') or ''
-            if nxt.startswith('/') and not nxt.startswith('//') and nxt != '/admin': return redirect(nxt)
-            return redirect(url_for('dashboard'))
-        nxt=request.form.get('next') or request.args.get('next',''); prov=bool(request.args.get('provider')) or any(x in nxt for x in ('/O-Rider','/O-Ride','/O-Drive','/O-drive','/O-Movers')); pname='O Partner'
-        if '/O-Rider' in nxt or '/O-Ride' in nxt: pname='O-Ride'
-        elif '/O-Drive' in nxt or '/O-drive' in nxt: pname='O-Drive'
-        elif '/O-Movers' in nxt: pname='O-Movers'
-        return render_template('login.html',error='Invalid credentials or inactive account.',next=nxt,provider=prov,provider_name=pname)
-    nxt=request.args.get('next','')
-    prov=bool(request.args.get('provider')) or any(x in nxt for x in ('/O-Rider','/O-Ride','/O-Drive','/O-drive','/O-Movers'))
-    provider_name='O Partner'
-    if '/O-Rider' in nxt or '/O-Ride' in nxt: provider_name='O-Ride'
-    elif '/O-Drive' in nxt or '/O-drive' in nxt: provider_name='O-Drive'
-    elif '/O-Movers' in nxt: provider_name='O-Movers'
-    return render_template('login.html',error=None,next=nxt,provider=prov,provider_name=provider_name)
-@app.route('/logout')
+ err=''; next_url=request.args.get('next','/services')
+ if request.method=='POST':
+  identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
+  a=q('SELECT * FROM accounts WHERE lower(username)=? AND active=1',(identifier,),True)
+  if a and check_password_hash(a['password_hash'],pw):
+   session['account_id']=a['id']
+   if a['role']=='partner': return redirect(SERVICE_PATHS.get(a['service'],'/services'))
+   return redirect(next_url if next_url.startswith('/') else '/services')
+  err='The name/username or password is not correct.'
+ return render_template('login.html',sidebar=nav(),error=err)
+
+@app.get('/partner-login')
+def partner_login(): return redirect(url_for('login'))
+@app.get('/logout')
 def logout(): session.clear(); return redirect(url_for('home'))
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    u=current_user();
-    if u['role']=='admin': return redirect(url_for('admin'))
-    if u['role']=='driver': return redirect(url_for('driver_dashboard'))
-    c=get_db(); rides=c.execute('SELECT r.*,d.name driver_name FROM requests r LEFT JOIN users d ON d.id=r.driver_id WHERE r.customer_id=? ORDER BY r.id DESC LIMIT 20',(u['id'],)).fetchall(); c.close()
-    upsert_visitor({})
-    return render_template('customer_dashboard.html',user=u,rides=rides,share_ref=str(u['id']))
 
-@app.route('/join',methods=['GET','POST'])
-def join():
-    return redirect(url_for('home'))
+@app.route('/account',methods=['GET','POST'])
+@login_required('customer')
+def account_page():
+ a=actor(); msg=None; err=None
+ if request.method=='POST':
+  name=request.form.get('name','').strip(); phone=request.form.get('phone','').strip()
+  if not name: err='Name is required.'
+  else:
+   db().execute('UPDATE accounts SET name=?,phone=? WHERE id=?',(name,phone,a['id'])); db().commit(); msg='Account updated.'; a=actor()
+ return render_template('account.html',sidebar=nav(),account=a,error=err,success=msg)
 
-@app.route('/api/estimate',methods=['POST'])
-def api_estimate():
-    data=request.get_json() or {}; service=data.get('service','bike'); km=float(data.get('distance_km') or 0); items=int(data.get('items') or 0); helpers=int(data.get('helpers') or 0)
-    return jsonify(service=service, distance_km=km, fare=fare(service,km,items,helpers), commission_pct=float(setting('platform_commission','10')))
+@app.post('/api/app-rating')
+@login_required('customer')
+def app_rating():
+ data=request.get_json(silent=True) or request.form; value=int(data.get('rating',0) or 0); note=(data.get('note') or '').strip()
+ if value not in (1,2,3,4,5): return jsonify(ok=False,error='Choose a rating from 1 to 5.'),400
+ db().execute('INSERT INTO ratings(customer_id,app_rating,note,created_at) VALUES(?,?,?,?)',(actor()['id'],value,note,now())); db().commit(); return jsonify(ok=True)
 
-@app.route('/api/request',methods=['POST'])
-def api_request():
-    u=current_user()
-    if not u or u['role']!='customer':
-        u=get_guest_user(d.get('contact_phone','') if (d:=request.get_json(silent=True) or {}) else '')
-        try:
-            c=get_db(); c.execute('UPDATE visitors SET user_id=? WHERE visitor_token=?',(u['id'],session.get('visitor_token'))); c.commit(); c.close()
-        except Exception:
-            pass
-    else:
-        d=request.get_json(silent=True) or {}
-    d=d or {}
-    service=d.get('service');
-    if service not in SERVICES: return jsonify(error='Invalid service.'),400
-    pickup=(d.get('pickup') or '').strip(); dest=(d.get('destination') or '').strip()
-    plat=d.get('pickup_lat'); plng=d.get('pickup_lng'); dlat=d.get('dest_lat'); dlng=d.get('dest_lng')
-    if not pickup or not dest: return jsonify(error='Pickup and destination are required.'),400
-    if plat is None or plng is None: return jsonify(error='Please turn on your location so O can find the right nearby partner.'),400
-    km=haversine(float(plat),float(plng),float(dlat),float(dlng)) if None not in (plat,plng,dlat,dlng) else float(d.get('distance_km') or 0)
-    amount=fare(service,km,int(d.get('items') or 0),int(d.get('helpers') or 0))
-    contact_phone=(d.get('contact_phone') or '').strip() or None
-    c=get_db(); cur=c.execute('INSERT INTO requests(customer_id,service,pickup,destination,pickup_lat,pickup_lng,dest_lat,dest_lng,distance_km,fare,customer_offer,payment_method,notes,contact_phone,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(u['id'],service,pickup,dest,plat,plng,dlat,dlng,km,amount,d.get('customer_offer'),d.get('payment_method','cash'),d.get('notes',''),contact_phone,now())); rid=cur.lastrowid; c.commit(); c.close()
-    drv=find_driver(service,float(plat) if plat is not None else None,float(plng) if plng is not None else None)
-    if drv:
-        c=get_db(); c.execute("UPDATE requests SET driver_id=?,status='assigned',accepted_at=NULL WHERE id=?",(drv['user_id'],rid)); c.commit(); c.close(); notify(drv['user_id'],'ride','New O request',f'{SERVICES[service]} request near you: {pickup}',rid)
-    audit('request_created','request',rid,f'service={service};fare={amount};driver={drv["user_id"] if drv else None}',u['id'])
-    return jsonify(ok=True,request_id=rid,fare=amount,status='assigned' if drv else 'searching',driver={'name':drv['name'],'phone':mask_phone(drv['phone'])} if drv else None)
+@app.get('/customer/trips')
+@login_required('customer')
+def trips():
+ rows=q('SELECT r.*,p.id pid,a.name partner_name FROM requests r LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE r.customer_id=? ORDER BY r.id DESC LIMIT 30',(actor()['id'],))
+ return render_template('trips.html',sidebar=nav(),trips=rows)
 
-@app.route('/api/request/<int:rid>')
-@login_required
+@app.get('/customer/ratings')
+@login_required('customer')
+def ratings_page():
+ rows=q('SELECT r.*,a.name partner_name FROM ratings x LEFT JOIN requests r ON r.id=x.request_id LEFT JOIN partners p ON p.id=x.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE x.customer_id=? ORDER BY x.id DESC',(actor()['id'],))
+ completed=q("SELECT r.*,a.name partner_name,p.id partner_id FROM requests r LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE r.customer_id=? AND r.status='completed' ORDER BY r.id DESC",(actor()['id'],))
+ return render_template('ratings.html',sidebar=nav(),ratings=rows,completed=completed)
+
+@app.post('/api/rate')
+@login_required('customer')
+def rate():
+ data=request.get_json(silent=True) or request.form; rid=int(data.get('request_id')); app_rating=int(data.get('app_rating',0) or 0); pr=int(data.get('partner_rating',0) or 0); note=(data.get('note') or '').strip()
+ r=q("SELECT * FROM requests WHERE id=? AND customer_id=? AND status='completed'",(rid,actor()['id']),True)
+ if not r: return jsonify(ok=False,error='Trip not found'),404
+ db().execute('INSERT INTO ratings(customer_id,partner_id,request_id,app_rating,partner_rating,note,created_at) VALUES(?,?,?,?,?,?,?)',(actor()['id'],r['partner_id'],rid,app_rating or None,pr or None,note,now())); db().commit(); return jsonify(ok=True)
+
+@app.route('/help',methods=['GET','POST'])
+def help_page():
+ err=''
+ if request.method=='POST':
+  a=actor(); kind=request.form.get('kind','concern'); msg=request.form.get('message','').strip(); guest=request.form.get('guest_name','').strip()
+  if not msg: err='Please tell us what you need.'
+  else: db().execute('INSERT INTO feedback(customer_id,guest_name,kind,message,created_at) VALUES(?,?,?,?,?)',(a['id'] if a else None,guest,kind,msg,now())); db().commit(); return render_template('help.html',sidebar=nav(),success='Your message has been sent to O.',error='')
+ return render_template('help.html',sidebar=nav(),error=err,success=None)
+
+
+@app.get('/service/<service>')
+
+def customer_service(service):
+ if service not in SERVICES: abort(404)
+ log_event('service',service)
+ return render_template('service.html',sidebar=nav(),service=service,service_name=SERVICES[service])
+
+# Provider entry points are the only public provider links in V1.
+@app.route('/O-Ride',methods=['GET'])
+@app.route('/O-Drive',methods=['GET'])
+@app.route('/O-Movers',methods=['GET'])
+def provider_entry():
+ path=request.path.lower(); service='ride' if 'ride' in path else 'drive' if 'drive' in path else 'mover'
+ a=actor()
+ if a and a['role']=='partner':
+  if a['service']!=service: return redirect(SERVICE_PATHS[a['service']])
+  return redirect(url_for('partner_home',service=service))
+ return render_template('provider_entry.html',sidebar=nav(),service=service,service_name=SERVICES[service],action=SERVICE_PATHS[service])
+
+@app.post('/provider-login')
+def provider_login_post():
+ service=request.form.get('service'); identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
+ a=q('SELECT * FROM accounts WHERE lower(username)=? AND active=1 AND role=\'partner\'',(identifier,),True)
+ if a and a['service']==service and check_password_hash(a['password_hash'],pw): session['account_id']=a['id']; return redirect(url_for('partner_home',service=service))
+ return render_template('provider_entry.html',sidebar=nav(),service=service,service_name=SERVICES[service],action=SERVICE_PATHS[service],error='Partner name/username or password is not correct.')
+
+@app.get('/partner/<service>')
+@login_required('partner')
+def partner_home(service):
+ a=actor(); p=q('SELECT p.*,a.name FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
+ if not p or p['service']!=service: abort(403)
+ reqs=q("SELECT r.*,a.name customer_name FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END,r.id DESC LIMIT 30",(service,p['id'],p['id']))
+ return render_template('partner.html',sidebar=nav('partner',service),partner=p,requests=reqs,service=service,service_name=SERVICES[service])
+
+@app.post('/api/partner/status')
+@login_required('partner')
+def partner_status():
+ a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}; status=data.get('status','orange'); lat=data.get('lat'); lon=data.get('lon')
+ if status not in ('offline','orange','green','blue'): status='orange'
+ db().execute('UPDATE partners SET status=?,lat=?,lon=?,last_seen=? WHERE id=?',(status,lat,lon,now(),p['id'])); db().commit(); return jsonify(ok=True)
+
+@app.post('/api/partner/request')
+@login_required('partner')
+def partner_request():
+ a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}; rid=int(data.get('request_id')); act=data.get('action')
+ r=q('SELECT * FROM requests WHERE id=? AND service=?',(rid,p['service']),True)
+ if not r: return jsonify(ok=False,error='Request not found'),404
+ if act=='accept' and (r['status']=='requested'):
+  db().execute('UPDATE requests SET partner_id=?,status=\'assigned\',updated_at=? WHERE id=?',(p['id'],now(),rid)); db().execute('UPDATE partners SET status=\'green\' WHERE id=?',(p['id'],)); db().commit()
+ elif act=='start' and r['partner_id']==p['id']: db().execute('UPDATE requests SET status=\'on_trip\',updated_at=? WHERE id=?',(now(),rid)); db().execute('UPDATE partners SET status=\'blue\' WHERE id=?',(p['id'],)); db().commit()
+ elif act=='complete' and r['partner_id']==p['id']:
+  db().execute('UPDATE requests SET status=\'completed\',updated_at=? WHERE id=?',(now(),rid)); db().execute('UPDATE partners SET status=\'orange\',completed=completed+1,earnings=earnings+COALESCE(?,0) WHERE id=?',(r['fare'],p['id'])); db().commit()
+ elif act=='decline': pass
+ return jsonify(ok=True)
+
+@app.get('/partner/requests')
+@login_required('partner')
+def partner_requests(): return redirect(url_for('partner_home',service=actor()['service']))
+@app.get('/partner/earnings')
+@login_required('partner')
+def partner_earnings():
+ a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); return render_template('partner_info.html',sidebar=nav('partner',p['service']),heading='Earnings',partner=p,service=p['service'],message=f"KES {p['earnings']:.0f} recorded on completed trips.")
+@app.get('/partner/ratings')
+@login_required('partner')
+def partner_ratings():
+ a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); rows=q('SELECT x.*,a.name customer_name FROM ratings x LEFT JOIN accounts a ON a.id=x.customer_id WHERE x.partner_id=? ORDER BY x.id DESC',(p['id'],)); return render_template('partner_ratings.html',sidebar=nav('partner',p['service']),partner=p,rows=rows)
+@app.get('/partner/help')
+@login_required('partner')
+def partner_help(): return redirect(url_for('help_page'))
+
+@app.get('/api/partners/nearby')
+def nearby_partners():
+ service=request.args.get('service'); lat=float(request.args.get('lat','0')); lon=float(request.args.get('lon','0'))
+ rows=q("SELECT p.*,a.name FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND a.active=1 AND p.status='orange' AND p.lat IS NOT NULL AND p.lon IS NOT NULL",(service,))
+ out=[]
+ for p in rows:
+  d=math.hypot((p['lat']-lat)*111,(p['lon']-lon)*111*math.cos(math.radians(lat))); out.append({'id':p['id'],'name':p['name'],'lat':p['lat'],'lon':p['lon'],'distance_km':round(d,2),'rating':p['rating']})
+ return jsonify(sorted(out,key=lambda x:x['distance_km'])[:10])
+
+@app.get('/api/request/<int:rid>')
 def request_status(rid):
-    u=current_user() or get_guest_user(); c=get_db(); r=c.execute('SELECT r.*,d.name driver_name FROM requests r LEFT JOIN users d ON d.id=r.driver_id WHERE r.id=? AND (r.customer_id=? OR r.driver_id=?)',(rid,u['id'],u['id'])).fetchone(); c.close()
-    if not r: return jsonify(error='Not found'),404
-    d=None
-    if r['driver_id']:
-        d=c.execute('SELECT d.lat,d.lng,d.status,d.name FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(r['driver_id'],)).fetchone()
-    c.close()
-    payload=dict(r); payload['driver_lat']=d['lat'] if d else None; payload['driver_lng']=d['lng'] if d else None; payload['driver_status']=d['status'] if d else None; payload['driver_name']=d['name'] if d else payload.get('driver_name')
-    return jsonify(request=payload)
+ r=q('SELECT r.*,p.lat partner_lat,p.lon partner_lon,p.status partner_status,a.name partner_name FROM requests r LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE r.id=?',(rid,),True)
+ if not r: return jsonify(ok=False),404
+ return jsonify(dict(r))
 
-@app.route('/api/request/<int:rid>/action',methods=['POST'])
-@login_required
-def request_action(rid):
-    u=current_user() or get_guest_user(); action=(request.get_json() or {}).get('action'); c=get_db(); r=c.execute('SELECT * FROM requests WHERE id=?',(rid,)).fetchone()
-    if not r: c.close(); return jsonify(error='Not found'),404
-    if u['role']=='driver' and r['driver_id']==u['id']:
-        if not u['active'] or not u['verified']:
-            c.close(); return jsonify(error='Your O partner account is not active or verified.'),403
-        allowed={'accept':'accepted','reject':'searching','start':'on_trip','complete':'completed','cancel':'cancelled'}
-        if action not in allowed: c.close(); return jsonify(error='Invalid action'),400
-        ns=allowed[action]
-        if action=='reject':
-            c.execute("UPDATE requests SET driver_id=NULL,status='searching' WHERE id=?",(rid,))
-            c.commit()
-            next_driver=find_driver(r['service'], r['pickup_lat'], r['pickup_lng'])
-            if next_driver:
-                c.execute("UPDATE requests SET driver_id=?,status='assigned' WHERE id=?",(next_driver['user_id'],rid)); c.commit()
-                notify(next_driver['user_id'],'ride','New O request',f'{SERVICES[r['service']]} request near you: {r['pickup']}',rid)
-        elif action=='accept': c.execute("UPDATE requests SET status='accepted',accepted_at=? WHERE id=?",(now(),rid))
-        elif action=='start': c.execute("UPDATE requests SET status='on_trip',started_at=? WHERE id=?",(now(),rid))
-        elif action=='complete': c.execute("UPDATE requests SET status='completed',completed_at=?,payment_status='pending' WHERE id=?",(now(),rid)); c.execute('UPDATE drivers SET status=\'available\',jobs=jobs+1 WHERE user_id=?',(u['id'],))
-        elif action=='cancel': c.execute("UPDATE requests SET status='cancelled',cancelled_at=?,cancel_reason='driver' WHERE id=?",(now(),rid)); c.execute("UPDATE drivers SET status='available' WHERE user_id=?",(u['id'],))
-        c.commit(); c.close(); notify(r['customer_id'],'ride','O ride update',f'Your request #{rid} is now {ns.replace("_"," ")}.',rid); audit('request_action','request',rid,action,u['id']); return jsonify(ok=True,status=ns)
-    if u['role']=='customer' and r['customer_id']==u['id'] and action=='cancel' and r['status'] in ('searching','assigned','accepted'):
-        c.execute("UPDATE requests SET status='cancelled',cancelled_at=?,cancel_reason='customer' WHERE id=?",(now(),rid));
-        if r['driver_id']: c.execute("UPDATE drivers SET status='available' WHERE user_id=?",(r['driver_id'],))
-        c.commit(); c.close(); audit('request_cancelled','request',rid,'customer',u['id']); return jsonify(ok=True,status='cancelled')
-    c.close(); return jsonify(error='Not permitted'),403
+@app.get('/api/geocode/search')
+def geocode_search():
+ qv=request.args.get('q','').strip()
+ if not qv: return jsonify([])
+ try:
+  url='https://nominatim.openstreetmap.org/search?'+urllib.parse.urlencode({'q':qv+', Kenya','format':'json','limit':5})
+  req=urllib.request.Request(url,headers={'User-Agent':'O-System-V1/1.0'})
+  with urllib.request.urlopen(req,timeout=8) as r: data=json.load(r)
+  return jsonify([{'name':x.get('display_name',''),'lat':float(x['lat']),'lon':float(x['lon'])} for x in data])
+ except Exception as e: return jsonify([])
 
-@app.route('/api/notifications')
-@login_required
-def notifications():
-    u=current_user(); c=get_db(); rows=c.execute('SELECT * FROM notifications WHERE user_id=? AND read_at IS NULL ORDER BY id DESC LIMIT 20',(u['id'],)).fetchall(); c.close(); return jsonify(items=[dict(r) for r in rows])
-@app.route('/api/notifications/read',methods=['POST'])
-@login_required
-def notifications_read():
-    u=current_user(); c=get_db(); c.execute('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL',(now(),u['id'])); c.commit(); c.close(); return jsonify(ok=True)
+@app.get('/api/route')
+def route_api():
+ try:
+  a=(float(request.args['olat']),float(request.args['olon'])); b=(float(request.args['dlat']),float(request.args['dlon']))
+  coords=f'{a[1]},{a[0]};{b[1]},{b[0]}'
+  url='https://router.project-osrm.org/route/v1/driving/'+coords+'?overview=full&geometries=geojson'
+  with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'O-System-V1/1.0'}),timeout=10) as r: data=json.load(r)
+  rt=data['routes'][0]; return jsonify(distance_km=rt['distance']/1000,duration_min=rt['duration']/60,geometry=[[p[1],p[0]] for p in rt['geometry']['coordinates']])
+ except Exception: return jsonify(error='road_route_unavailable'),503
 
-def provider_entry(service):
-    u=current_user()
-    target=PROVIDER_PATHS[service]
-    if not u:
-        return redirect(url_for('login', provider='1', next=target))
-    if u['role']!='driver':
-        abort(404)
-    c=get_db(); d=c.execute('SELECT d.*,u.name,u.phone,u.verified,u.active FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(u['id'],)).fetchone(); c.close()
-    if not d or d['service']!=service or not d['active']:
-        abort(404)
-    return driver_dashboard_view(d)
+@app.post('/api/request')
+def create_request():
+ data=request.get_json() or {}; service=data.get('service');
+ if service not in SERVICES: return jsonify(ok=False,error='Invalid service'),400
+ pickup=data.get('pickup') or {}; dest=data.get('destination') or {}; a=actor(); guest=data.get('guest_name','').strip()
+ if not (pickup.get('lat') is not None and pickup.get('lon') is not None and dest.get('lat') is not None and dest.get('lon') is not None): return jsonify(ok=False,error='Choose pickup and destination on the map'),400
+ # fare is derived from routed distance when available; no hidden price.
+ dist=float(data.get('distance_km') or 0)
+ rates={'ride':(55,18,60),'drive':(110,42,150),'mover':(600,60,700)}; base,pkm,mn=rates[service]; fare=max(mn,base+dist*pkm)
+ t=now(); cur=db().execute('INSERT INTO requests(customer_id,guest_name,service,pickup_name,destination_name,pickup_lat,pickup_lon,dest_lat,dest_lon,fare,payment,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(a['id'] if a else None,guest,service,pickup.get('name','Pickup'),dest.get('name','Destination'),pickup['lat'],pickup['lon'],dest['lat'],dest['lon'],round(fare/10)*10,data.get('payment','Cash'),'requested',t,t)); rid=cur.lastrowid
+ # Match nearest available partner.
+ partners=q("SELECT p.*,a.name FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND a.active=1 AND p.status='orange' AND p.lat IS NOT NULL AND p.lon IS NOT NULL",(service,)); best=None; bd=None
+ for p in partners:
+  d=math.hypot((p['lat']-pickup['lat'])*111,(p['lon']-pickup['lon'])*111*math.cos(math.radians(pickup['lat'])))
+  if bd is None or d<bd: bd=d; best=p
+ if best:
+  db().execute('UPDATE requests SET partner_id=?,status=\'assigned\',updated_at=? WHERE id=?',(best['id'],t,rid)); db().execute('UPDATE partners SET status=\'green\' WHERE id=?',(best['id'],))
+ db().commit(); return jsonify(ok=True,id=rid,fare=round(fare/10)*10,assigned=best['name'] if best else None,status='assigned' if best else 'requested')
 
-def driver_dashboard_view(d):
-    u=current_user()
-    c=get_db()
-    jobs=c.execute("SELECT r.*,u.name customer_name FROM requests r JOIN users u ON u.id=r.customer_id WHERE r.driver_id=? AND r.service=? ORDER BY CASE r.status WHEN 'assigned' THEN 0 WHEN 'accepted' THEN 1 WHEN 'on_trip' THEN 2 ELSE 3 END, r.id DESC LIMIT 40",(u['id'],d['service'])).fetchall()
-    pending=sum(1 for j in jobs if j['status']=='assigned')
-    completed=c.execute("SELECT COUNT(*) n FROM requests WHERE driver_id=? AND service=? AND status='completed'",(u['id'],d['service'])).fetchone()['n']
-    earnings=c.execute("SELECT COALESCE(SUM(fare),0) n FROM requests WHERE driver_id=? AND service=? AND status='completed'",(u['id'],d['service'])).fetchone()['n']
-    c.close()
-    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']],pending=pending,completed=completed,earnings=earnings,provider_location={'lat':d['lat'],'lng':d['lng']} if d['lat'] is not None and d['lng'] is not None else None)
-
-@app.route('/O-Rider')
-@app.route('/O-Ride')
-def provider_ride():
-    return provider_entry('bike')
-
-@app.route('/O-Drive')
-@app.route('/O-drive')
-@app.route('/o-drive')
-def provider_drive():
-    return provider_entry('ride')
-
-@app.route('/O-Movers')
-@app.route('/O-Mover')
-@app.route('/o-movers')
-def provider_movers():
-    return provider_entry('mover')
-
-@app.route('/driver')
-def driver_dashboard_legacy():
-    u=current_user()
-    if not u or u['role']!='driver': return redirect(url_for('login'))
-    c=get_db(); d=c.execute('SELECT * FROM drivers WHERE user_id=?',(u['id'],)).fetchone(); c.close()
-    if not d: abort(404)
-    return redirect(PROVIDER_PATHS.get(d['service'],'/'))
-@app.route('/api/driver/presence',methods=['POST'])
-@login_required
-def driver_presence():
-    u=current_user();
-    if u['role']!='driver' or not u['active'] or not u['verified']: return jsonify(error='Your O partner account is not active or verified.'),403
-    d=request.get_json() or {}; status=d.get('status','offline'); lat=d.get('lat'); lng=d.get('lng')
-    if status not in ('available','offline','on_trip'): return jsonify(error='Invalid status'),400
-    c=get_db(); c.execute('UPDATE drivers SET status=?,lat=?,lng=? WHERE user_id=?',(status,lat,lng,u['id'])); c.execute('UPDATE users SET last_seen=? WHERE id=?',(now(),u['id'])); c.commit(); c.close(); return jsonify(ok=True,status=status)
-
-@app.route('/api/request/<int:rid>/rate',methods=['POST'])
-@login_required
-def rate_request(rid):
-    u=current_user() or get_guest_user(); d=request.get_json() or {}; app_rating=max(1,min(5,int(d.get('app_rating') or 0))); rider_rating=d.get('rider_rating'); rider_rating=max(1,min(5,int(rider_rating))) if rider_rating else None
-    c=get_db(); r=c.execute('SELECT * FROM requests WHERE id=?',(rid,)).fetchone();
-    if not r or r['customer_id']!=u['id'] or r['status']!='completed': c.close(); return jsonify(error='Rating unavailable'),400
-    try:
-        c.execute('INSERT INTO ratings(request_id,customer_id,driver_id,app_rating,rider_rating,comment,created_at) VALUES(?,?,?,?,?,?,?)',(rid,u['id'],r['driver_id'],app_rating,rider_rating,d.get('comment',''),now()))
-        if r['driver_id'] and rider_rating:
-            avg=c.execute('SELECT AVG(rider_rating) x FROM ratings WHERE driver_id=? AND rider_rating IS NOT NULL',(r['driver_id'],)).fetchone()['x'] or 5
-            c.execute('UPDATE drivers SET rating=? WHERE user_id=?',(round(avg,2),r['driver_id']))
-        c.commit(); c.close(); audit('rating_created','request',rid,actor_id=u['id']); return jsonify(ok=True)
-    except sqlite3.IntegrityError: c.close(); return jsonify(error='Already rated'),409
-
-@app.route('/complaints',methods=['GET','POST'])
-@login_required
-def complaints():
-    u=current_user(); c=get_db()
-    if request.method=='POST':
-        rid=request.form.get('request_id') or None; cat=request.form.get('category','other'); details=request.form.get('details','').strip()
-        if details: c.execute('INSERT INTO complaints(request_id,user_id,category,details,created_at) VALUES(?,?,?,?,?)',(rid,u['id'],cat,details,now())); c.commit(); audit('complaint_created','request',rid,cat, u['id'])
-    rows=c.execute('SELECT * FROM complaints WHERE user_id=? ORDER BY id DESC',(u['id'],)).fetchall(); c.close(); return render_template('complaints.html',rows=rows,user=u)
-
-@app.route('/promise212324',methods=['GET','POST'])
+# Admin
+@app.route(ADMIN_PATH,methods=['GET','POST'])
 def admin_login():
-    u=current_user()
-    if u and u['role']=='admin': return redirect(url_for('admin'))
-    if request.method=='POST':
-        username=request.form.get('username','').strip()
-        password=request.form.get('password','')
-        c=get_db(); u=c.execute("SELECT * FROM users WHERE role='admin' LIMIT 1").fetchone(); c.close()
-        if u and username==ADMIN_USERNAME and password==ADMIN_PASSWORD and u['active']:
-            session['uid']=u['id']; audit('admin_login','user',u['id'],actor_id=u['id']); return redirect(url_for('admin'))
-        return render_template('admin_login.html',error='Invalid control-room credentials.')
-    return render_template('admin_login.html',error=None,admin_path=ADMIN_PATH)
+ if session.get('admin'):
+  stats={'customers':q("SELECT count(*) c FROM accounts WHERE role='customer'",one=True)['c'],'partners':q("SELECT count(*) c FROM accounts WHERE role='partner'",one=True)['c'],'open_requests':q("SELECT count(*) c FROM requests WHERE status IN ('requested','assigned','on_trip')",one=True)['c'],'open_feedback':q("SELECT count(*) c FROM feedback WHERE status='open'",one=True)['c'],'pwa':0}
+  return render_template('admin.html',sidebar=nav('admin'),stats=stats)
+ err=''
+ if request.method=='POST':
+  if request.form.get('username')==ADMIN_USER and request.form.get('password')==ADMIN_PASS:
+   session['admin']=True; return redirect(ADMIN_PATH)
+  err='Admin credentials are not correct.'
+ return render_template('admin_login.html',sidebar='',error=err)
+@app.get('/admin')
+def admin_block(): abort(404)
+@app.get(ADMIN_PATH+'/logout')
+def admin_logout(): session.pop('admin',None); return redirect(url_for('admin_login'))
 
-@app.route('/admin')
-def admin_public_block():
-    return abort(404)
-
-@app.route('/promise212324/api/live')
-@admin_required
-def admin_live():
-    c=get_db(); rows=c.execute("SELECT d.user_id,d.service,d.status,d.lat,d.lng,d.rating,u.name,u.phone,u.active,u.verified FROM drivers d JOIN users u ON u.id=d.user_id WHERE u.active=1 AND d.lat IS NOT NULL AND d.lng IS NOT NULL").fetchall(); c.close(); return jsonify(items=[dict(r) for r in rows])
-
-@app.route('/promise212324/api/visitors')
-@admin_required
-def admin_visitors():
-    c=get_db(); rows=c.execute("""SELECT v.*,u.name,u.phone,
-      (SELECT ve.service FROM visit_events ve WHERE ve.visitor_token=v.visitor_token ORDER BY ve.id DESC LIMIT 1) last_service,
-      (SELECT r.service FROM requests r WHERE r.customer_id=v.user_id ORDER BY r.id DESC LIMIT 1) last_request_service,
-      (SELECT r.status FROM requests r WHERE r.customer_id=v.user_id ORDER BY r.id DESC LIMIT 1) last_request_status,
-      CASE WHEN u.role='driver' THEN 'Partner' WHEN u.role='customer' AND u.is_guest=1 THEN 'Guest customer' WHEN u.role='customer' THEN 'Customer' WHEN u.role='admin' THEN 'Admin' ELSE 'Visitor' END person_type
-      FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 200""").fetchall(); c.close();
-    out=[]
-    labels={'bike':'O-Ride','ride':'O-Drive','mover':'O-Movers'}
-    for r in rows:
-        d=dict(r); d['service_name']=labels.get(d.get('last_service'), d.get('last_service') or 'Browsing O'); out.append(d)
-    return jsonify(items=out)
-
-@app.route('/promise212324/api/service/<service>')
+@app.get(ADMIN_PATH+'/service/<service>')
 @admin_required
 def admin_service(service):
-    if service not in SERVICES: return jsonify(error='Unknown service'),404
-    c=get_db()
-    drivers=c.execute("SELECT d.user_id,d.service,d.status,d.lat,d.lng,d.rating,u.name,u.phone,u.active,u.verified FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.service=? AND u.active=1",(service,)).fetchall()
-    requests=c.execute("SELECT r.id,r.pickup,r.destination,r.pickup_lat,r.pickup_lng,r.dest_lat,r.dest_lng,r.fare,r.status,r.created_at,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id WHERE r.service=? ORDER BY r.id DESC LIMIT 100",(service,)).fetchall()
-    c.close()
-    return jsonify(service=service,drivers=[dict(x) for x in drivers],requests=[dict(x) for x in requests])
+ if service not in SERVICES: abort(404)
+ reqs=q("SELECT r.*,COALESCE(c.name,r.guest_name,'Guest') customer_name,p.id partner_id,pa.name partner_name,p.status partner_status,p.lat partner_lat,p.lon partner_lon FROM requests r LEFT JOIN accounts c ON c.id=r.customer_id LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts pa ON pa.id=p.account_id WHERE r.service=? ORDER BY r.id DESC LIMIT 80",(service,))
+ partners=q("SELECT p.*,a.name,a.username,a.active a_active FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? ORDER BY a.name",(service,))
+ return render_template('admin_service.html',sidebar=nav('admin'),service=service,service_name=SERVICES[service],requests=reqs,partners=partners)
 
-@app.route('/promise212324/control')
+@app.route(ADMIN_PATH+'/partners',methods=['GET','POST'])
 @admin_required
-def admin():
-    c=get_db()
-    today=datetime.now(timezone.utc).date().isoformat()
-    stats={
-      'drivers':c.execute("SELECT COUNT(*) n FROM users WHERE role='driver'").fetchone()['n'],
-      'customers':c.execute("SELECT COUNT(*) n FROM users WHERE role='customer' AND is_guest=0").fetchone()['n'],
-      'guests':c.execute("SELECT COUNT(*) n FROM users WHERE role='customer' AND is_guest=1").fetchone()['n'],
-      'active_drivers':c.execute("SELECT COUNT(*) n FROM drivers d JOIN users u ON u.id=d.user_id WHERE u.active=1 AND d.status='available'").fetchone()['n'],
-      'open_requests':c.execute("SELECT COUNT(*) n FROM requests WHERE status IN ('searching','assigned','accepted','on_trip')").fetchone()['n'],
-      'completed':c.execute("SELECT COUNT(*) n FROM requests WHERE status='completed'").fetchone()['n'],
-      'complaints':c.execute("SELECT COUNT(*) n FROM complaints WHERE status='open'").fetchone()['n'],
-      'visitors':c.execute("SELECT COUNT(*) n FROM visitors").fetchone()['n'],
-      'today_visitors':c.execute("SELECT COUNT(*) n FROM visitors WHERE substr(first_seen,1,10)=?",(today,)).fetchone()['n'],
-      'pwa_installs':c.execute("SELECT COUNT(*) n FROM pwa_installs").fetchone()['n'],
-      'today_installs':c.execute("SELECT COUNT(*) n FROM pwa_installs WHERE substr(installed_at,1,10)=?",(today,)).fetchone()['n'],
-      'app_errors':c.execute("SELECT COUNT(*) n FROM app_errors WHERE resolved=0").fetchone()['n'],
-    }
-    service_interest={}
-    for svc,label in SERVICES.items(): service_interest[label]=c.execute("SELECT COUNT(*) n FROM visit_events WHERE service=?",(svc,)).fetchone()['n']
-    drivers=c.execute("SELECT d.*,u.name,u.phone,u.active,u.verified,u.created_at FROM drivers d JOIN users u ON u.id=d.user_id ORDER BY u.id DESC").fetchall()
-    customers=c.execute("SELECT id,name,phone,active,is_guest,created_at,last_seen FROM users WHERE role='customer' ORDER BY id DESC LIMIT 150").fetchall()
-    requests=c.execute("SELECT r.*,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id ORDER BY r.id DESC LIMIT 100").fetchall()
-    complaints=c.execute("SELECT c.*,u.name FROM complaints c JOIN users u ON u.id=c.user_id ORDER BY c.id DESC LIMIT 50").fetchall()
-    visitors=c.execute("SELECT v.*,u.name,u.phone,u.role,u.is_guest, CASE WHEN u.role='driver' THEN 'Partner' WHEN u.role='customer' AND u.is_guest=1 THEN 'Guest customer' WHEN u.role='customer' THEN 'Customer' WHEN u.role='admin' THEN 'Admin' ELSE 'Visitor' END person_type FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 150").fetchall()
-    errors=c.execute("SELECT e.*,u.name FROM app_errors e LEFT JOIN users u ON u.id=e.user_id WHERE e.resolved=0 ORDER BY e.id DESC LIMIT 100").fetchall()
-    settings={k:setting(k) for k in ['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url','simulate']}
-    c.close()
-    return render_template('admin.html',stats=stats,drivers=drivers,customers=customers,requests=requests,complaints=complaints,settings=settings,admin_path=ADMIN_PATH,visitors=visitors,errors=errors,service_interest=service_interest,service_labels=SERVICES)
+def admin_partners():
+ if request.method=='POST':
+  name=request.form.get('name','').strip(); username=request.form.get('username','').strip().lower(); pw=request.form.get('password',''); service=request.form.get('service')
+  if name and username and pw and service in SERVICES and not q('SELECT id FROM accounts WHERE username=?',(username,),True):
+   cur=db().execute('INSERT INTO accounts(name,username,password_hash,role,phone,created_at) VALUES(?,?,?,?,?,?)',(name,username,generate_password_hash(pw),'partner',request.form.get('phone',''),now())); aid=cur.lastrowid; db().execute('INSERT INTO partners(account_id,service,vehicle,plate,licence,status) VALUES(?,?,?,?,?,\'orange\')',(aid,service,request.form.get('vehicle',''),request.form.get('plate',''),request.form.get('licence',''))); db().commit()
+ partners=q('SELECT p.*,a.name,a.username,a.active,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id ORDER BY p.service,a.name')
+ return render_template('admin_partners.html',sidebar=nav('admin'),partners=partners)
 
-@app.route('/promise212324/simulate')
+@app.post(ADMIN_PATH+'/partner/<int:pid>/toggle')
 @admin_required
-def admin_simulate():
-    return render_template('simulate.html',enabled=setting('simulate','0')=='1',service_labels=SERVICES)
+def toggle_partner(pid):
+ p=q('SELECT * FROM partners WHERE id=?',(pid,),True)
+ if not p: abort(404)
+ a=q('SELECT * FROM accounts WHERE id=?',(p['account_id'],),True); new=0 if a['active'] else 1; db().execute('UPDATE accounts SET active=? WHERE id=?',(new,a['id'])); db().execute('UPDATE partners SET status=? WHERE id=?',('orange' if new else 'offline',pid)); db().commit(); return redirect(url_for('admin_partners'))
 
-@app.route('/promise212324/simulate/toggle',methods=['POST'])
+@app.get(ADMIN_PATH+'/people')
 @admin_required
-def admin_simulate_toggle():
-    enabled='1' if request.form.get('simulate')=='1' else '0'
-    c=get_db(); c.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('simulate',enabled)); c.commit(); c.close()
-    audit('simulation_toggled','settings',details=f'enabled={enabled}',actor_id=current_user()['id'])
-    return redirect(url_for('admin'))
+def admin_people():
+ people=q('SELECT e.*,COALESCE(a.name,e.role) display_name FROM events e LEFT JOIN accounts a ON a.id=e.customer_id ORDER BY e.id DESC LIMIT 120'); return render_template('admin_people.html',sidebar=nav('admin'),people=people)
 
-@app.route('/promise212324/partner/add',methods=['POST'])
+@app.get(ADMIN_PATH+'/inbox')
 @admin_required
-def admin_partner_add():
-    service=request.form.get('service','bike')
-    if service not in SERVICES: return abort(400)
-    name=request.form.get('name','').strip(); username=request.form.get('username','').strip(); password=request.form.get('password',''); phone=request.form.get('phone','').strip()
-    vehicle=request.form.get('vehicle_label','').strip(); plate=request.form.get('plate','').strip(); license_no=request.form.get('license_no','').strip()
-    if not name or not username or len(password)<6 or not phone:
-        return redirect(url_for('admin',msg='Complete partner name, username, phone and a 6+ character password.'))
-    c=get_db()
-    try:
-        cur=c.execute("INSERT INTO users(role,name,phone,username,password_hash,active,verified,created_at,last_seen) VALUES('driver',?,?,?,?,1,1,?,?)",(name,phone,username,generate_password_hash(password),now(),now()))
-        uid=cur.lastrowid
-        code='O'+secrets.token_hex(3).upper()
-        c.execute("INSERT INTO drivers(user_id,service,vehicle_label,plate,license_no,status,joined_code) VALUES(?,?,?,?,?,'offline',?)",(uid,service,vehicle,plate,license_no,code))
-        c.commit(); audit('partner_created','user',uid,f'service={service};username={username}',current_user()['id'])
-    except sqlite3.IntegrityError:
-        c.rollback(); c.close(); return redirect(url_for('admin',msg='That username or phone is already in use.'))
-    c.close(); return redirect(url_for('admin',msg=f'{SERVICES[service]} partner created.'))
-
-@app.route('/promise212324/driver/<int:uid>/action',methods=['POST'])
+def admin_inbox():
+ rows=q('SELECT f.*,a.name account_name FROM feedback f LEFT JOIN accounts a ON a.id=f.customer_id ORDER BY f.id DESC LIMIT 120'); return render_template('admin_feedback.html',sidebar=nav('admin'),heading='Inbox',rows=rows,mode='inbox')
+@app.get(ADMIN_PATH+'/complaints')
 @admin_required
-def admin_driver_action(uid):
-    action=request.form.get('action'); c=get_db();
-    if action=='verify': c.execute("UPDATE users SET verified=1 WHERE id=? AND role='driver'",(uid,))
-    elif action=='deactivate': c.execute("UPDATE users SET active=0 WHERE id=?",(uid,)); c.execute("UPDATE drivers SET status='offline',deactivated_reason=? WHERE user_id=?",(request.form.get('reason','admin action'),uid))
-    elif action=='reactivate': c.execute('UPDATE users SET active=1 WHERE id=?',(uid,))
-    c.commit(); c.close(); audit('driver_'+action,'user',uid,actor_id=current_user()['id']); return redirect(url_for('admin'))
-
-@app.route('/promise212324/user/<int:uid>/action',methods=['POST'])
+def admin_complaints():
+ rows=q("SELECT f.*,a.name account_name FROM feedback f LEFT JOIN accounts a ON a.id=f.customer_id WHERE f.kind='complaint' ORDER BY f.id DESC LIMIT 120"); return render_template('admin_feedback.html',sidebar=nav('admin'),heading='Complaints',rows=rows,mode='complaints')
+@app.post(ADMIN_PATH+'/feedback/<int:fid>/close')
 @admin_required
-def admin_user_action(uid):
-    action=request.form.get('action'); c=get_db(); u=c.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
-    if not u or u['role']=='admin': c.close(); return abort(404)
-    if action=='deactivate': c.execute('UPDATE users SET active=0 WHERE id=?',(uid,));
-    elif action=='reactivate': c.execute('UPDATE users SET active=1 WHERE id=?',(uid,))
-    c.commit(); c.close(); audit('user_'+action,'user',uid,actor_id=current_user()['id']); return redirect(url_for('admin'))
+def close_feedback(fid): db().execute("UPDATE feedback SET status='closed' WHERE id=?",(fid,)); db().commit(); return redirect(request.referrer or url_for('admin_login'))
 
-@app.route('/promise212324/complaint/<int:cid>',methods=['POST'])
+@app.get(ADMIN_PATH+'/simulate')
 @admin_required
-def admin_complaint(cid):
-    c=get_db(); c.execute("UPDATE complaints SET status='resolved',admin_note=?,resolved_at=? WHERE id=?",(request.form.get('note',''),now(),cid)); c.commit(); c.close(); audit('complaint_resolved','complaint',cid,actor_id=current_user()['id']); return redirect(url_for('admin'))
-
-@app.route('/promise212324/settings',methods=['POST'])
+def simulate(): return render_template('simulate.html',sidebar=nav('admin'),enabled=q("SELECT value FROM settings WHERE key='simulate'",one=True)['value']=='1')
+@app.post(ADMIN_PATH+'/simulate/toggle')
 @admin_required
-def admin_settings():
-    keys=['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url','simulate']
-    c=get_db();
-    for k in keys:
-        if k in request.form: c.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,request.form[k].strip()))
-    c.commit(); c.close(); audit('settings_updated','settings',actor_id=current_user()['id']); return redirect(url_for('admin'))
+def sim_toggle(): val='1' if q("SELECT value FROM settings WHERE key='simulate'",one=True)['value']!='1' else '0'; db().execute("UPDATE settings SET value=? WHERE key='simulate'",(val,)); db().commit(); return redirect(url_for('simulate'))
 
-@app.route('/promise212324/error/<int:eid>/resolve',methods=['POST'])
+@app.get(ADMIN_PATH+'/system')
 @admin_required
-def admin_error_resolve(eid):
-    c=get_db(); c.execute('UPDATE app_errors SET resolved=1 WHERE id=?',(eid,)); c.commit(); c.close(); audit('error_resolved','app_error',eid,actor_id=current_user()['id']); return redirect(url_for('admin'))
+def admin_system():
+ errors=[]
+ return render_template('admin_system.html',sidebar=nav('admin'),errors=errors,db_path=DB)
 
-@app.route('/promise212324/backup')
-@admin_required
-def admin_backup():
-    ts=datetime.now().strftime('%Y%m%d-%H%M%S'); dest=BACKUP_DIR/f'o-{ts}.sqlite3'; src=get_db();
-    dst=sqlite3.connect(dest); src.backup(dst); dst.close(); src.close(); audit('backup_created','backup',details=str(dest.name),actor_id=current_user()['id']); return send_file(dest,as_attachment=True,download_name=dest.name)
+@app.errorhandler(404)
+def not_found(e):
+ if request.path.startswith('/api/'): return jsonify(ok=False,error='not_found'),404
+ return render_template('error.html',sidebar=nav(),code=404,message='That page does not exist.'),404
+@app.errorhandler(403)
+def forbidden(e): return render_template('error.html',sidebar=nav(),code=403,message='You do not have access to this area.'),403
 
-@app.route('/promise212324/export')
-@admin_required
-def admin_export():
-    c=get_db(); payload={}
-    for t in ['users','drivers','requests','ratings','complaints','notifications','audits','settings','visitors']:
-        payload[t]=[dict(r) for r in c.execute(f'SELECT * FROM {t}').fetchall()]
-    c.close(); p=BACKUP_DIR/f'export-{datetime.now().strftime("%Y%m%d-%H%M%S")}.json'; p.write_text(json.dumps(payload,default=str,indent=2)); return send_file(p,as_attachment=True,download_name=p.name)
-
-@app.route('/logout-all')
-def noop(): return redirect(url_for('home'))
-
-print('O Mobility build:', app.config.get('O_BUILD_VERSION'))
-print('O Mobility provider routes:', '/O-Ride', '/O-Drive', '/O-Movers')
-
-if __name__=='__main__': app.run(debug=True)
+if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.environ.get('PORT','10000')))
