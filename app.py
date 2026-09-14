@@ -1,8 +1,9 @@
-import os, sqlite3, math, json, urllib.parse, urllib.request, secrets
+import os, sqlite3, math, json, urllib.parse, urllib.request, secrets, io
 from functools import wraps
 from datetime import datetime, timezone
 from flask import Flask, g, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
+import qrcode
 
 app=Flask(__name__, template_folder='app/templates', static_folder='app/static')
 ADMIN_PATH='/promise212324'
@@ -101,6 +102,17 @@ def services():
 @app.get('/qr')
 def qr_page():
  log_event('qr'); return render_template('qr.html',sidebar=nav(),page_theme='light')
+
+@app.get('/qr-image.png')
+def qr_image():
+    target = request.url_root.rstrip('/') + '/'
+    image = qrcode.make(target)
+    buf = io.BytesIO()
+    image.save(buf, format='PNG')
+    resp = app.response_class(buf.getvalue(), mimetype='image/png')
+    resp.headers['Cache-Control'] = 'no-store, max-age=0'
+    return resp
+
 
 @app.route('/account/register',methods=['GET','POST'])
 def register():
