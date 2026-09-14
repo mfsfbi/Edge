@@ -1,59 +1,50 @@
 let deferredInstallPrompt=null;
-window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;maybeShowInstall()});
-function maybeShowInstall(){const box=document.getElementById("installPrompt");if(!box)return;if(localStorage.getItem("o_install_dismissed"))return;if(!window.matchMedia("(display-mode: standalone)").matches && !navigator.standalone)box.hidden=false}
-function dismissInstall(){const box=document.getElementById("installPrompt");if(box)box.hidden=true;localStorage.setItem("o_install_dismissed","1")}
-async function installO(){if(deferredInstallPrompt){deferredInstallPrompt.prompt();try{await deferredInstallPrompt.userChoice}catch(e){}deferredInstallPrompt=null;dismissInstall();return}toast("Use your browser's Install or Add to Home Screen option to keep O on your phone.")}
-window.addEventListener("load",()=>{setTimeout(maybeShowInstall,2500)});
-let serviceMap, userMarker, reqMarker, destinationMarker;
+let installDismissed=false;
+function isStandalone(){return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true}
+function installPlatformHint(){
+  const h=document.getElementById('installHint'); if(!h)return;
+  const ua=navigator.userAgent||'';
+  if(/iPhone|iPad|iPod/i.test(ua)) h.textContent='Tap Share, then Add to Home Screen.';
+  else if(/Android/i.test(ua)) h.textContent='Tap Install O to add O to your phone.';
+  else h.textContent='Install O from this browser for quicker access next time.';
+}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;maybeShowInstall(true)});
+window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;dismissInstall(true);toast('O is now on your device.');beep()});
+function maybeShowInstall(force=false){
+  const box=document.getElementById('installPrompt'); if(!box||isStandalone())return;
+  installPlatformHint();
+  if(localStorage.getItem('o_install_dismissed')==='1' && !force)return;
+  const visits=Number(localStorage.getItem('o_visits')||0)+1; localStorage.setItem('o_visits',String(visits));
+  if(force || visits>=2) box.hidden=false;
+}
+function dismissInstall(permanent=false){const box=document.getElementById('installPrompt');if(box)box.hidden=true;if(permanent)localStorage.setItem('o_install_dismissed','1')}
+async function installO(){
+  if(deferredInstallPrompt){
+    try{await deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice;}catch(e){}
+    deferredInstallPrompt=null; dismissInstall(true); return;
+  }
+  // iOS and browsers without beforeinstallprompt cannot install programmatically.
+  installPlatformHint();
+  const ua=navigator.userAgent||'';
+  if(/iPhone|iPad|iPod/i.test(ua)) { toast('Tap Share, then Add to Home Screen.'); return; }
+  if(/Android/i.test(ua)) { toast('Open your browser menu and choose Install app or Add to Home screen.'); return; }
+  toast('Use your browser menu to choose Install O or Add to Home screen.');
+}
+window.addEventListener('load',()=>{setTimeout(()=>maybeShowInstall(false),3500)});
+let serviceMap,userMarker,reqMarker,destinationMarker,estimateTimer;
 function toast(msg){const e=document.getElementById('toast');if(!e)return;e.textContent=msg;e.style.display='block';clearTimeout(window._toast);window._toast=setTimeout(()=>e.style.display='none',3500)}
 function beep(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const a=new C();const o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.type='sine';o.frequency.value=720;g.gain.value=.045;o.start();setTimeout(()=>o.frequency.value=940,100);setTimeout(()=>{o.stop();a.close()},220)}catch(e){}}
-async function captureVisitorContext(withLocation=false){const data={screen_width:screen.width,screen_height:screen.height,is_mobile:/Mobi|Android/i.test(navigator.userAgent),platform:navigator.userAgentData?.platform||navigator.platform||'',device_model:navigator.userAgentData?.model||'',browser_family:'',browser_version:'',platform_version:''};const ua=navigator.userAgent||'';if(/Edg\//.test(ua))data.browser_family='Edge';else if(/OPR\//.test(ua))data.browser_family='Opera';else if(/Chrome\//.test(ua))data.browser_family='Chrome';else if(/Firefox\//.test(ua))data.browser_family='Firefox';else if(/Safari\//.test(ua))data.browser_family='Safari';if(navigator.userAgentData?.getHighEntropyValues){try{const x=await navigator.userAgentData.getHighEntropyValues(['model','platform','platformVersion','uaFullVersion']);Object.assign(data,{device_model:x.model||data.device_model,platform:x.platform||data.platform,platform_version:x.platformVersion||'',browser_version:x.uaFullVersion||''})}catch(e){}}if(withLocation&&navigator.geolocation){await new Promise(resolve=>navigator.geolocation.getCurrentPosition(p=>{data.lat=p.coords.latitude;data.lng=p.coords.longitude;data.accuracy=p.coords.accuracy;resolve()},()=>resolve(),{enableHighAccuracy:true,timeout:12000,maximumAge:30000}));}try{await fetch('/api/visitor/context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),keepalive:true})}catch(e){}}
-async function reverseGeocode(lat,lng){
-  try{
-    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`);
-    if(!r.ok) return '';
-    const x=await r.json();
-    return x.display_name||'';
-  }catch(e){return ''}
-}
-async function searchPlace(text){
-  try{
-    const q=(text||'').trim(); if(!q) return null;
-    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`);
-    if(!r.ok) return null;
-    const rows=await r.json(); return rows[0]||null;
-  }catch(e){return null}
-}
+async function captureVisitorContext(withLocation=false){const data={screen_width:screen.width,screen_height:screen.height,is_mobile:/Mobi|Android/i.test(navigator.userAgent),platform:navigator.userAgentData?.platform||navigator.platform||'',device_model:navigator.userAgentData?.model||'',browser_family:'',browser_version:'',platform_version:''};const ua=navigator.userAgent||'';if(/Edg\//.test(ua))data.browser_family='Edge';else if(/OPR\//.test(ua))data.browser_family='Opera';else if(/Firefox\//.test(ua))data.browser_family='Firefox';else if(/Chrome\//.test(ua))data.browser_family='Chrome';else if(/Safari\//.test(ua))data.browser_family='Safari';if(navigator.userAgentData?.getHighEntropyValues){try{const x=await navigator.userAgentData.getHighEntropyValues(['model','platform','platformVersion','uaFullVersion']);Object.assign(data,{device_model:x.model||data.device_model,platform:x.platform||data.platform,platform_version:x.platformVersion||'',browser_version:x.uaFullVersion||''})}catch(e){}}if(withLocation&&navigator.geolocation){await new Promise(resolve=>navigator.geolocation.getCurrentPosition(p=>{data.lat=p.coords.latitude;data.lng=p.coords.longitude;data.accuracy=p.coords.accuracy;resolve()},()=>resolve(),{enableHighAccuracy:true,timeout:12000,maximumAge:30000}));}try{await fetch('/api/visitor/context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),keepalive:true})}catch(e){}}
+async function reverseGeocode(lat,lng){try{const r=await fetch(`/api/geocode/reverse?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);if(!r.ok)return '';const x=await r.json();return x.name||x.display_name||''}catch(e){return ''}}
+async function searchPlace(text){try{const q=(text||'').trim();if(!q)return null;const r=await fetch(`/api/geocode/search?q=${encodeURIComponent(q)}`);if(!r.ok)return null;const x=await r.json();const row=x.items?.[0];return row?{lat:row.lat,lon:row.lng,display_name:row.name}:null}catch(e){return null}}
 function setHidden(id,value){const el=document.getElementById(id);if(el)el.value=value==null?'':value}
-async function useLocation(callback){
-  if(!navigator.geolocation)return toast('Your browser does not provide location. You can search for your pickup instead.');
-  toast('Finding your location…');
-  navigator.geolocation.getCurrentPosition(async p=>{
-    const lat=p.coords.latitude,lng=p.coords.longitude;
-    setHidden('plat',lat.toFixed(6)); setHidden('plng',lng.toFixed(6));
-    const pickup=document.getElementById('pickup');
-    const place=await reverseGeocode(lat,lng);
-    if(pickup && place) pickup.value=place;
-    if(serviceMap){serviceMap.setView([lat,lng],15);if(userMarker)userMarker.setLatLng([lat,lng]);else userMarker=L.marker([lat,lng]).addTo(serviceMap).bindPopup('Your pickup').openPopup()}
-    const state=document.getElementById('locationState');if(state){state.textContent='Pickup found near you';state.className='status';}
-    await captureVisitorContext(true);toast(place?'Pickup found.':'Location found.');beep();updateEstimate();if(callback)callback()
-  },()=>toast('Please allow location, or type your pickup place instead.'),{enableHighAccuracy:true,timeout:12000,maximumAge:15000});
-}
-async function findDestination(){
-  const input=document.getElementById('destination');
-  const text=input?.value||'';
-  if(!text.trim())return toast('Type a place, street or landmark first.');
-  toast('Finding destination…');
-  const place=await searchPlace(text);
-  if(!place)return toast('I could not find that place. Try a nearby landmark or street name.');
-  const lat=Number(place.lat),lng=Number(place.lon);setHidden('dlat',lat.toFixed(6));setHidden('dlng',lng.toFixed(6));
-  input.value=place.display_name||text;
-  if(serviceMap){if(destinationMarker)destinationMarker.setLatLng([lat,lng]);else destinationMarker=L.marker([lat,lng]).addTo(serviceMap).bindPopup('Destination').openPopup();serviceMap.fitBounds(L.latLngBounds([[lat,lng],[Number(document.getElementById('plat')?.value)||lat,Number(document.getElementById('plng')?.value)||lng]]),{padding:[30,30]})}
-  toast('Destination found.');beep();updateEstimate()
-}
-function initServiceMap(){const el=document.getElementById('map');if(!el)return;serviceMap=L.map('map').setView([-1.2864,36.8172],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(serviceMap);serviceMap.on('click',async e=>{const{lat,lng}=e.latlng;setHidden('dlat',lat.toFixed(6));setHidden('dlng',lng.toFixed(6));const place=await reverseGeocode(lat,lng);const dest=document.getElementById('destination');if(dest&&place)dest.value=place;if(destinationMarker)destinationMarker.setLatLng([lat,lng]);else destinationMarker=L.marker([lat,lng]).addTo(serviceMap).bindPopup('Destination').openPopup();updateEstimate();beep()});useLocation()}
-function updateEstimate(){const g=id=>document.getElementById(id)?.value||'';const a=Number(g('plat')),b=Number(g('plng')),c=Number(g('dlat')),d=Number(g('dlng'));if(!(a&&b&&c&&d))return;const R=6371,p1=a*Math.PI/180,p2=c*Math.PI/180,dp=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2,km=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));fetch('/api/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:window.OService,distance_km:km,items:Number(g('items')||0),helpers:Number(g('helpers')||0)})}).then(r=>r.json()).then(x=>{if(x.fare)document.getElementById('fare').textContent='KSh '+x.fare}).catch(()=>{})}
-function requestO(service){const g=id=>document.getElementById(id)?.value||null;const payload={service,pickup:g('pickup'),destination:g('destination'),pickup_lat:g('plat')?Number(g('plat')):null,pickup_lng:g('plng')?Number(g('plng')):null,dest_lat:g('dlat')?Number(g('dlat')):null,dest_lng:g('dlng')?Number(g('dlng')):null,items:Number(g('items')||0),helpers:Number(g('helpers')||0),payment_method:g('payment'),contact_phone:g('contact_phone')};if(!payload.pickup||!payload.destination)return toast('Add pickup and destination first.');if(payload.pickup_lat===null||payload.pickup_lng===null)return useLocation(()=>requestO(service));if(payload.dest_lat===null||payload.dest_lng===null)return toast('Tap your destination on the map first.');fetch('/api/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).then(x=>{if(x.error){toast(x.error);return}document.getElementById('fare').textContent='KSh '+x.fare;document.getElementById('status').textContent=x.status;toast(x.driver?'Partner assigned: '+x.driver.name:'Request sent — searching nearby partners.');beep();pollRequest(x.request_id)}).catch(()=>toast('Could not send the request.'))}
+function hasPoint(prefix){const a=Number(document.getElementById(prefix+'lat')?.value),b=Number(document.getElementById(prefix+'lng')?.value);return Number.isFinite(a)&&Number.isFinite(b)}
+async function useLocation(callback){if(!navigator.geolocation)return toast('Location is not available here. Search your pickup instead.');toast('Finding your location…');navigator.geolocation.getCurrentPosition(async p=>{const lat=p.coords.latitude,lng=p.coords.longitude;setHidden('plat',lat);setHidden('plng',lng);const pickup=document.getElementById('pickup');const place=await reverseGeocode(lat,lng);if(pickup&&place)pickup.value=place;const state=document.getElementById('locationState');if(state)state.textContent='Pickup found near you';if(serviceMap){serviceMap.setView([lat,lng],15);if(userMarker)userMarker.setLatLng([lat,lng]);else userMarker=L.marker([lat,lng]).addTo(serviceMap).bindPopup('Pickup').openPopup()}await captureVisitorContext(true);toast('Pickup found.');beep();updateEstimate();if(callback)callback()},()=>toast('Please allow location or search your pickup.'),{enableHighAccuracy:true,timeout:12000,maximumAge:15000})}
+async function resolvePickup(){if(hasPoint('p'))return true;const input=document.getElementById('pickup'),text=input?.value?.trim();if(!text)return false;const place=await searchPlace(text);if(!place)return false;const lat=Number(place.lat),lng=Number(place.lon);setHidden('plat',lat);setHidden('plng',lng);if(input)input.value=place.display_name||text;return true}
+async function findDestination(){const input=document.getElementById('destination'),text=input?.value?.trim();if(!text)return toast('Type a place, street or landmark first.');toast('Finding destination…');const place=await searchPlace(text);if(!place)return toast('I could not find that place. Try a nearby landmark or street name.');const lat=Number(place.lat),lng=Number(place.lon);setHidden('dlat',lat);setHidden('dlng',lng);if(input)input.value=place.display_name||text;if(serviceMap){if(destinationMarker)destinationMarker.setLatLng([lat,lng]);else destinationMarker=L.marker([lat,lng]).addTo(serviceMap).bindPopup('Destination').openPopup();const plat=Number(document.getElementById('plat')?.value),plng=Number(document.getElementById('plng')?.value);if(Number.isFinite(plat)&&Number.isFinite(plng))serviceMap.fitBounds(L.latLngBounds([[lat,lng],[plat,plng]]),{padding:[30,30]})}toast('Destination found.');beep();updateEstimate()}
+function initServiceMap(){const el=document.getElementById('map');if(!el)return;serviceMap=L.map('map').setView([-1.2864,36.8172],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(serviceMap);serviceMap.on('click',async e=>{const{lat,lng}=e.latlng;setHidden('dlat',lat);setHidden('dlng',lng);const place=await reverseGeocode(lat,lng);const dest=document.getElementById('destination');if(dest)dest.value=place||`Selected location`;if(destinationMarker)destinationMarker.setLatLng([lat,lng]);else destinationMarker=L.marker([lat,lng]).addTo(serviceMap).bindPopup('Destination').openPopup();updateEstimate();beep()});const dest=document.getElementById('destination');if(dest){let dt;dest.addEventListener('input',()=>{clearTimeout(dt);dt=setTimeout(()=>findDestination(),800)});dest.addEventListener('change',findDestination);dest.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findDestination()}})}const pickup=document.getElementById('pickup');if(pickup){pickup.addEventListener('change',()=>{updateEstimate()});pickup.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();updateEstimate()}})}useLocation();}
+async function updateEstimate(){clearTimeout(estimateTimer);estimateTimer=setTimeout(async()=>{const pickupOK=await resolvePickup();if(!pickupOK)return;if(!hasPoint('d')){const text=document.getElementById('destination')?.value?.trim();if(text)await findDestination();}if(!hasPoint('d'))return;const a=Number(document.getElementById('plat')?.value),b=Number(document.getElementById('plng')?.value),c=Number(document.getElementById('dlat')?.value),d=Number(document.getElementById('dlng')?.value);if([a,b,c,d].some(v=>!Number.isFinite(v)))return;const R=6371,p1=a*Math.PI/180,p2=c*Math.PI/180,dp=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2,km=R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));try{const r=await fetch('/api/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:window.OService,distance_km:km,items:Number(document.getElementById('items')?.value||0),helpers:Number(document.getElementById('helpers')?.value||0)})});const x=await r.json();const fareEl=document.getElementById('fare');if(fareEl&&x.fare!=null)fareEl.textContent='KSh '+Number(x.fare).toLocaleString();}catch(e){}},350)}
+async function requestO(service){const pickup=document.getElementById('pickup')?.value?.trim()||'',dest=document.getElementById('destination')?.value?.trim()||'';if(!pickup||!dest)return toast('Add pickup and destination first.');if(!hasPoint('p')){const ok=await resolvePickup();if(!ok)return useLocation(()=>requestO(service));}if(!hasPoint('d')){await findDestination();if(!hasPoint('d'))return toast('Choose a destination on the map or search for it.')}updateEstimate();const payload={service,pickup:document.getElementById('pickup').value,destination:document.getElementById('destination').value,pickup_lat:Number(document.getElementById('plat').value),pickup_lng:Number(document.getElementById('plng').value),dest_lat:Number(document.getElementById('dlat').value),dest_lng:Number(document.getElementById('dlng').value),items:Number(document.getElementById('items')?.value||0),helpers:Number(document.getElementById('helpers')?.value||0),payment_method:document.getElementById('payment')?.value,contact_phone:document.getElementById('contact_phone')?.value||null};try{const r=await fetch('/api/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const x=await r.json();if(x.error){toast(x.error);return}document.getElementById('fare').textContent='KSh '+Number(x.fare).toLocaleString();document.getElementById('status').textContent=x.status;toast(x.driver?'Partner assigned: '+x.driver.name:'Request sent — finding a nearby partner.');beep();pollRequest(x.request_id)}catch(e){toast('Could not send the request.')}}
 function pollRequest(id){let tries=0;const t=setInterval(()=>{tries++;fetch('/api/request/'+id).then(r=>r.json()).then(x=>{if(x.request){const s=x.request.status;const el=document.getElementById('status');if(el)el.textContent=s;if(['completed','cancelled'].includes(s)||tries>180){clearInterval(t);if(s==='completed')beep()}}}).catch(()=>{})},3000)}
 function setPresence(status){const send=(lat,lng)=>fetch('/api/driver/presence',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,lat,lng})}).then(r=>r.json()).then(x=>{if(x.ok){document.getElementById('presence').textContent=x.status;toast(status==='available'?'You are now available.':'You are offline.');beep()}});if(navigator.geolocation&&status!=='offline')navigator.geolocation.getCurrentPosition(p=>send(p.coords.latitude,p.coords.longitude),()=>send(null,null));else send(null,null)}
 function jobAction(id,action){fetch('/api/request/'+id+'/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}).then(r=>r.json()).then(x=>{if(x.error)return toast(x.error);toast('Request #'+id+' is '+x.status);beep();setTimeout(()=>location.reload(),500)})}

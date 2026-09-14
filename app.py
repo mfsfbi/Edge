@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, math, os, secrets, sqlite3, shutil, uuid, io, re
+import json, math, os, secrets, sqlite3, shutil, uuid, io, re, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -256,6 +256,12 @@ def root_service_worker():
 def favicon():
     return app.send_static_file('logo.svg')
 
+@app.route('/pulse_receiver', methods=['POST'])
+def pulse_receiver():
+    # Compatibility endpoint for harmless uptime/pulse senders. O does not need
+    # the external pulse service for core operation.
+    return jsonify(ok=True)
+
 @app.route('/')
 def home():
     upsert_visitor({})
@@ -269,6 +275,34 @@ def qr_code():
     img=qrcode.make(target)
     buf=io.BytesIO(); img.save(buf,format='PNG'); buf.seek(0)
     return send_file(buf,mimetype='image/png',download_name='O-share.png')
+
+def nominatim_json(path):
+    url='https://nominatim.openstreetmap.org'+path
+    req=urllib.request.Request(url,headers={'User-Agent':'O-Mobility/1.0 (location search)'})
+    with urllib.request.urlopen(req,timeout=8) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+@app.route('/api/geocode/search')
+def geocode_search():
+    q=(request.args.get('q') or '').strip()
+    if not q: return jsonify(items=[])
+    try:
+        rows=nominatim_json('/search?format=jsonv2&limit=1&q='+urllib.parse.quote(q))
+        return jsonify(items=[{'lat':x.get('lat'),'lng':x.get('lon'),'name':x.get('display_name','')} for x in rows])
+    except Exception:
+        return jsonify(items=[])
+
+@app.route('/api/geocode/reverse')
+def geocode_reverse():
+    try:
+        lat=float(request.args.get('lat')); lng=float(request.args.get('lng'))
+    except (TypeError,ValueError):
+        return jsonify(name='')
+    try:
+        x=nominatim_json('/reverse?format=jsonv2&lat='+urllib.parse.quote(str(lat))+'&lon='+urllib.parse.quote(str(lng)))
+        return jsonify(name=x.get('display_name',''))
+    except Exception:
+        return jsonify(name='')
 
 @app.route('/api/visitor/context',methods=['POST'])
 def visitor_context():
