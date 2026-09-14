@@ -3,6 +3,7 @@ import json, math, os, secrets, sqlite3, shutil, uuid, io, re
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
+import hashlib
 from werkzeug.security import generate_password_hash, check_password_hash
 import qrcode
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for, send_file, abort
@@ -10,18 +11,16 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 BASE_DIR = Path(__file__).resolve().parent
 
 def choose_data_dir():
-    requested = os.environ.get('DATA_DIR')
-    candidates = [Path(requested)] if requested else []
-    if os.environ.get('RENDER'):
-        candidates += [Path('/var/data'), BASE_DIR / 'instance']
-    else:
-        candidates += [BASE_DIR / 'instance']
+    # O only needs USER_NAME and PASSWORD in Render. Storage location is an
+    # implementation detail: use the persistent Render disk when available,
+    # otherwise fall back to a writable local instance directory.
+    candidates = [Path('/var/data'), BASE_DIR / 'instance']
     last_error = None
     for candidate in candidates:
         try:
             candidate.mkdir(parents=True, exist_ok=True)
             probe = candidate / '.write-test'
-            probe.write_text('ok')
+            probe.write_text('ok', encoding='utf-8')
             probe.unlink(missing_ok=True)
             return candidate
         except (OSError, PermissionError) as exc:
@@ -31,16 +30,20 @@ def choose_data_dir():
 
 DATA_DIR = choose_data_dir()
 DB_PATH = DATA_DIR / 'o.db'
-BACKUP_DIR = DATA_DIR / 'backups'; BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-SECRET_FILE = DATA_DIR / 'secret.key'
-if not SECRET_FILE.exists(): SECRET_FILE.write_text(secrets.token_urlsafe(48))
-SECRET_KEY = os.environ.get('SECRET_KEY') or SECRET_FILE.read_text().strip()
-app = Flask(__name__)
+BACKUP_DIR = DATA_DIR / 'backups'
+BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+# Keep session signing out of Render environment variables for now. It is
+# deterministically derived from the two requested admin credentials, so the
+# app remains easy to deploy while sessions still use a non-human-readable key.
+ADMIN_USERNAME = (os.environ.get('USER_NAME') or 'admin').strip()
+ADMIN_PASSWORD = os.environ.get('PASSWORD') or 'ChangeMeNow!'
+SECRET_KEY = hashlib.sha256((ADMIN_USERNAME + '|' + ADMIN_PASSWORD + '|O-MOBILITY-SESSION-V1').encode('utf-8')).hexdigest()
+
+app = Flask(__name__, template_folder=str(BASE_DIR / 'app' / 'templates'), static_folder=str(BASE_DIR / 'app' / 'static'), static_url_path='/static')
 app.secret_key = SECRET_KEY
 app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')))
-ADMIN_PATH = os.environ.get('ADMIN_PATH', 'promise212324').strip('/ ') or 'promise212324'
-ADMIN_USERNAME = os.environ.get('USER_NAME', 'admin')
-ADMIN_PASSWORD = os.environ.get('PASSWORD', os.environ.get('ADMIN_PASSWORD', 'ChangeMeNow!'))
+ADMIN_PATH = 'promise212324'
 
 SERVICES = {'bike':'O-Bikes','ride':'O-Ride','mover':'O-Movers'}
 STATUS_COLORS = {'available':'orange','assigned':'green','enroute':'green','on_trip':'blue','offline':'gray'}
@@ -243,10 +246,19 @@ def sitemap():
     urls=[url_for('home',_external=True),url_for('service_page',service='bike',_external=True),url_for('service_page',service='ride',_external=True),url_for('service_page',service='mover',_external=True)]
     return app.response_class('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{u}</loc></url>' for u in urls)+'</urlset>',mimetype='application/xml')
 
+@app.route('/sw.js')
+def root_service_worker():
+    # A root-scoped worker controls the whole O PWA, not only /static/.
+    return app.send_static_file('sw.js')
+
+@app.route('/favicon.ico')
+def favicon():
+    return app.send_static_file('logo.svg')
+
 @app.route('/')
 def home():
     upsert_visitor({})
-    return render_template('home.html',otravel_url=setting('otravel_url'),user=current_user())
+    return render_template('home.html',otravel_url='https://otravel-bleg.onrender.com/',user=current_user())
 
 @app.route('/qr')
 def qr_code():

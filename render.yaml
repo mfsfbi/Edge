@@ -11,15 +11,7 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
-      - key: SECRET_KEY
-        generateValue: true
       - key: USER_NAME
         sync: false
       - key: PASSWORD
         sync: false
-      - key: DATA_DIR
-        value: /var/data
-      - key: ADMIN_PATH
-        value: promise212324
-      - key: OTRAVEL_URL
-        value: https://otravel-bleg.onrender.com/
