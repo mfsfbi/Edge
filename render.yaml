@@ -1,14 +1,25 @@
 services:
   - type: web
     name: o-mobility
-    env: python
+    runtime: python
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --workers 2 --threads 4 --timeout 120 app:app
     healthCheckPath: /health
+    disk:
+      name: o-mobility-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: SECRET_KEY
         generateValue: true
-      - key: O_NAME
-        value: O
+      - key: USER_NAME
+        sync: false
+      - key: PASSWORD
+        sync: false
       - key: DATA_DIR
         value: /var/data
+      - key: ADMIN_PATH
+        value: promise212324
+      - key: OTRAVEL_URL
+        value: https://otravel-bleg.onrender.com/
