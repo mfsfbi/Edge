@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, math, os, secrets, sqlite3, shutil, uuid, io, re
+import json, math, os, secrets, sqlite3, shutil, uuid, io, re, urllib.parse, urllib.request
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -103,10 +103,25 @@ def init_db():
       browser_family TEXT, browser_version TEXT, is_mobile INTEGER DEFAULT 0, screen_width INTEGER, screen_height INTEGER,
       lat REAL, lng REAL, accuracy REAL, location_updated_at TEXT, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS visit_events (
+      id INTEGER PRIMARY KEY, visitor_token TEXT NOT NULL, user_id INTEGER REFERENCES users(id),
+      path TEXT NOT NULL, service TEXT, role_hint TEXT, entered_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS pwa_installs (
+      id INTEGER PRIMARY KEY, visitor_token TEXT NOT NULL, user_id INTEGER REFERENCES users(id),
+      platform TEXT, device_model TEXT, installed_at TEXT NOT NULL, UNIQUE(visitor_token)
+    );
+    CREATE TABLE IF NOT EXISTS app_errors (
+      id INTEGER PRIMARY KEY, source TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'error',
+      route TEXT, message TEXT NOT NULL, details TEXT, user_id INTEGER REFERENCES users(id),
+      visitor_token TEXT, created_at TEXT NOT NULL, resolved INTEGER NOT NULL DEFAULT 0
+    );
     ''')
     # Lightweight migrations for databases created by earlier O versions.
     cols={r['name'] for r in c.execute('PRAGMA table_info(users)').fetchall()}
     if 'is_guest' not in cols: c.execute('ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0')
+    visitor_cols={r['name'] for r in c.execute('PRAGMA table_info(visitors)').fetchall()}
+    if 'location_label' not in visitor_cols: c.execute('ALTER TABLE visitors ADD COLUMN location_label TEXT')
     req_cols={r['name'] for r in c.execute('PRAGMA table_info(requests)').fetchall()}
     if 'contact_phone' not in req_cols: c.execute('ALTER TABLE requests ADD COLUMN contact_phone TEXT')
     defaults={
@@ -202,16 +217,21 @@ def upsert_visitor(data):
     token=session.get('visitor_token') or secrets.token_urlsafe(24); session['visitor_token']=token
     ua=request.headers.get('User-Agent','')
     model=(data.get('device_model') or request.headers.get('Sec-CH-UA-Model') or '').strip()
-    platform=(data.get('platform') or request.headers.get('Sec-CH-UA-Platform') or platform_family(ua)).strip('\" ')
+    platform=(data.get('platform') or request.headers.get('Sec-CH-UA-Platform') or platform_family(ua)).strip('" ')
     browser=(data.get('browser_family') or browser_family(ua)).strip()
     is_mobile=1 if bool(data.get('is_mobile')) or 'mobile' in ua.lower() else 0
+    path=str(data.get('path') or request.path or '/')[:300]
+    svc=(data.get('service') or '').strip()[:30] or None
+    role_hint=(data.get('role_hint') or ('customer' if current_user() and current_user()['role']=='customer' else ('provider' if current_user() and current_user()['role']=='driver' else 'visitor')))[:30]
     c=get_db(); existing=c.execute('SELECT id FROM visitors WHERE visitor_token=?',(token,)).fetchone()
     values=(client_ip(),model,data.get('device_family') or ('Phone' if is_mobile else 'Computer'),platform,data.get('platform_version') or '',browser,data.get('browser_version') or '',is_mobile,data.get('screen_width'),data.get('screen_height'),now())
+    uid=current_user()['id'] if current_user() else None
     if existing:
-        c.execute("UPDATE visitors SET user_id=?,ip_address=?,device_model=COALESCE(NULLIF(?,''),device_model),device_family=?,platform=?,platform_version=?,browser_family=?,browser_version=?,is_mobile=?,screen_width=?,screen_height=?,last_seen=? WHERE id=?",((current_user()['id'] if current_user() else None),)+values+(existing['id'],))
+        c.execute("UPDATE visitors SET user_id=?,ip_address=?,device_model=COALESCE(NULLIF(?,''),device_model),device_family=?,platform=?,platform_version=?,browser_family=?,browser_version=?,is_mobile=?,screen_width=?,screen_height=?,last_seen=? WHERE id=?",(uid,)+values+(existing['id'],))
     else:
-        c.execute("INSERT INTO visitors(visitor_token,user_id,ip_address,device_model,device_family,platform,platform_version,browser_family,browser_version,is_mobile,screen_width,screen_height,first_seen,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(token,(current_user()['id'] if current_user() else None),*values[:-1],values[-1],values[-1]))
-    c.commit(); c.close()
+        c.execute("INSERT INTO visitors(visitor_token,user_id,ip_address,device_model,device_family,platform,platform_version,browser_family,browser_version,is_mobile,screen_width,screen_height,first_seen,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(token,uid,*values[:-1],values[-1],values[-1]))
+    c.execute('INSERT INTO visit_events(visitor_token,user_id,path,service,role_hint,entered_at) VALUES(?,?,?,?,?,?)',(token,uid,path,svc,role_hint,now()))
+    c.commit(); c.close();
     return token
 
 def get_guest_user(contact_phone=''):
@@ -235,7 +255,12 @@ def mask_phone(phone):
 
 @app.after_request
 def security_headers(resp):
-    resp.headers['X-Content-Type-Options']='nosniff'; resp.headers['X-Frame-Options']='SAMEORIGIN'; resp.headers['Referrer-Policy']='strict-origin-when-cross-origin'; return resp
+    resp.headers['X-Content-Type-Options']='nosniff'; resp.headers['X-Frame-Options']='SAMEORIGIN'; resp.headers['Referrer-Policy']='strict-origin-when-cross-origin'
+    if resp.status_code >= 500:
+        try:
+            c=get_db(); c.execute('INSERT INTO app_errors(source,severity,route,message,details,user_id,visitor_token,created_at) VALUES(?,?,?,?,?,?,?,?)',('server','error',request.path,f'HTTP {resp.status_code}',request.method,current_user()['id'] if current_user() else None,session.get('visitor_token'),now())); c.commit(); c.close()
+        except Exception: pass
+    return resp
 
 @app.route('/health')
 def health(): return jsonify(ok=True, service='O Mobility', time=now())
@@ -256,6 +281,12 @@ def root_service_worker():
 def favicon():
     return app.send_static_file('logo.svg')
 
+@app.route('/pulse_receiver', methods=['POST'])
+def pulse_receiver():
+    # Compatibility endpoint for harmless uptime/pulse senders. O does not need
+    # the external pulse service for core operation.
+    return jsonify(ok=True)
+
 @app.route('/')
 def home():
     upsert_visitor({})
@@ -270,6 +301,34 @@ def qr_code():
     buf=io.BytesIO(); img.save(buf,format='PNG'); buf.seek(0)
     return send_file(buf,mimetype='image/png',download_name='O-share.png')
 
+def nominatim_json(path):
+    url='https://nominatim.openstreetmap.org'+path
+    req=urllib.request.Request(url,headers={'User-Agent':'O-Mobility/1.0 (location search)'})
+    with urllib.request.urlopen(req,timeout=8) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+@app.route('/api/geocode/search')
+def geocode_search():
+    q=(request.args.get('q') or '').strip()
+    if not q: return jsonify(items=[])
+    try:
+        rows=nominatim_json('/search?format=jsonv2&limit=1&q='+urllib.parse.quote(q))
+        return jsonify(items=[{'lat':x.get('lat'),'lng':x.get('lon'),'name':x.get('display_name','')} for x in rows])
+    except Exception:
+        return jsonify(items=[])
+
+@app.route('/api/geocode/reverse')
+def geocode_reverse():
+    try:
+        lat=float(request.args.get('lat')); lng=float(request.args.get('lng'))
+    except (TypeError,ValueError):
+        return jsonify(name='')
+    try:
+        x=nominatim_json('/reverse?format=jsonv2&lat='+urllib.parse.quote(str(lat))+'&lon='+urllib.parse.quote(str(lng)))
+        return jsonify(name=x.get('display_name',''))
+    except Exception:
+        return jsonify(name='')
+
 @app.route('/api/visitor/context',methods=['POST'])
 def visitor_context():
     d=request.get_json(silent=True) or {}
@@ -277,9 +336,27 @@ def visitor_context():
     # Store consented browser geolocation only; no location is guessed from the browser name.
     if d.get('lat') is not None and d.get('lng') is not None:
         try:
-            c=get_db(); token=session.get('visitor_token'); c.execute('UPDATE visitors SET lat=?,lng=?,accuracy=?,location_updated_at=?,last_seen=? WHERE visitor_token=?',(float(d['lat']),float(d['lng']),float(d.get('accuracy') or 0),now(),now(),token)); c.commit(); c.close()
+            c=get_db(); token=session.get('visitor_token'); c.execute('UPDATE visitors SET lat=?,lng=?,accuracy=?,location_label=?,location_updated_at=?,last_seen=? WHERE visitor_token=?',(float(d['lat']),float(d['lng']),float(d.get('accuracy') or 0),str(d.get('location_label') or '')[:240],now(),now(),token)); c.commit(); c.close()
         except (TypeError,ValueError): pass
     return jsonify(ok=True)
+@app.route('/api/pwa/install',methods=['POST'])
+def pwa_install():
+    d=request.get_json(silent=True) or {}; token=session.get('visitor_token') or upsert_visitor(d)
+    c=get_db();
+    try:
+        c.execute('INSERT OR IGNORE INTO pwa_installs(visitor_token,user_id,platform,device_model,installed_at) VALUES(?,?,?,?,?)',(token,current_user()['id'] if current_user() else None,str(d.get('platform') or '')[:80],str(d.get('device_model') or '')[:120],now())); c.commit()
+    finally: c.close()
+    audit('pwa_install','visitor',None,details=f'platform={d.get("platform","")};model={d.get("device_model","")}',actor_id=current_user()['id'] if current_user() else None)
+    return jsonify(ok=True)
+
+@app.route('/api/client-error',methods=['POST'])
+def client_error():
+    d=request.get_json(silent=True) or {}; msg=str(d.get('message') or 'Client error')[:500]; details=str(d.get('details') or '')[:3000]
+    try:
+        c=get_db(); c.execute('INSERT INTO app_errors(source,severity,route,message,details,user_id,visitor_token,created_at) VALUES(?,?,?,?,?,?,?,?)',('browser',str(d.get('severity') or 'error')[:20],str(d.get('route') or request.path)[:300],msg,details,current_user()['id'] if current_user() else None,session.get('visitor_token'),now())); c.commit(); c.close()
+    except Exception: pass
+    return jsonify(ok=True)
+
 @app.route('/service/<service>')
 def service_page(service):
     if service not in SERVICES: return 'Not found',404
@@ -499,27 +576,48 @@ def admin_live():
 @app.route('/promise212324/api/visitors')
 @admin_required
 def admin_visitors():
-    c=get_db(); rows=c.execute("SELECT v.*,u.name,u.phone FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 150").fetchall(); c.close(); return jsonify(items=[dict(r) for r in rows])
+    c=get_db(); rows=c.execute("""SELECT v.*,u.name,u.phone,
+      (SELECT ve.service FROM visit_events ve WHERE ve.visitor_token=v.visitor_token ORDER BY ve.id DESC LIMIT 1) last_service,
+      (SELECT r.service FROM requests r WHERE r.customer_id=v.user_id ORDER BY r.id DESC LIMIT 1) last_request_service,
+      (SELECT r.status FROM requests r WHERE r.customer_id=v.user_id ORDER BY r.id DESC LIMIT 1) last_request_status,
+      CASE WHEN u.role='driver' THEN 'Partner' WHEN u.role='customer' AND u.is_guest=1 THEN 'Guest customer' WHEN u.role='customer' THEN 'Customer' WHEN u.role='admin' THEN 'Admin' ELSE 'Visitor' END person_type
+      FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 200""").fetchall(); c.close();
+    out=[]
+    labels={'bike':'O-Ride','ride':'O-Drive','mover':'O-Movers'}
+    for r in rows:
+        d=dict(r); d['service_name']=labels.get(d.get('last_service'), d.get('last_service') or 'Browsing O'); out.append(d)
+    return jsonify(items=out)
 
 @app.route('/promise212324/control')
 @admin_required
 def admin():
-    c=get_db(); stats={
+    c=get_db()
+    today=datetime.now(timezone.utc).date().isoformat()
+    stats={
       'drivers':c.execute("SELECT COUNT(*) n FROM users WHERE role='driver'").fetchone()['n'],
-      'customers':c.execute("SELECT COUNT(*) n FROM users WHERE role='customer'").fetchone()['n'],
+      'customers':c.execute("SELECT COUNT(*) n FROM users WHERE role='customer' AND is_guest=0").fetchone()['n'],
+      'guests':c.execute("SELECT COUNT(*) n FROM users WHERE role='customer' AND is_guest=1").fetchone()['n'],
       'active_drivers':c.execute("SELECT COUNT(*) n FROM drivers d JOIN users u ON u.id=d.user_id WHERE u.active=1 AND d.status='available'").fetchone()['n'],
       'open_requests':c.execute("SELECT COUNT(*) n FROM requests WHERE status IN ('searching','assigned','accepted','on_trip')").fetchone()['n'],
       'completed':c.execute("SELECT COUNT(*) n FROM requests WHERE status='completed'").fetchone()['n'],
       'complaints':c.execute("SELECT COUNT(*) n FROM complaints WHERE status='open'").fetchone()['n'],
       'visitors':c.execute("SELECT COUNT(*) n FROM visitors").fetchone()['n'],
-      'rated_app':c.execute("SELECT COUNT(*) n FROM ratings WHERE app_rating IS NOT NULL").fetchone()['n'],
+      'today_visitors':c.execute("SELECT COUNT(*) n FROM visitors WHERE substr(first_seen,1,10)=?",(today,)).fetchone()['n'],
+      'pwa_installs':c.execute("SELECT COUNT(*) n FROM pwa_installs").fetchone()['n'],
+      'today_installs':c.execute("SELECT COUNT(*) n FROM pwa_installs WHERE substr(installed_at,1,10)=?",(today,)).fetchone()['n'],
+      'app_errors':c.execute("SELECT COUNT(*) n FROM app_errors WHERE resolved=0").fetchone()['n'],
     }
+    service_interest={}
+    for svc,label in SERVICES.items(): service_interest[label]=c.execute("SELECT COUNT(*) n FROM visit_events WHERE service=?",(svc,)).fetchone()['n']
     drivers=c.execute("SELECT d.*,u.name,u.phone,u.active,u.verified,u.created_at FROM drivers d JOIN users u ON u.id=d.user_id ORDER BY u.id DESC").fetchall()
     customers=c.execute("SELECT id,name,phone,active,is_guest,created_at,last_seen FROM users WHERE role='customer' ORDER BY id DESC LIMIT 150").fetchall()
     requests=c.execute("SELECT r.*,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id ORDER BY r.id DESC LIMIT 100").fetchall()
-    complaints=c.execute("SELECT c.*,u.name FROM complaints c JOIN users u ON u.id=c.user_id ORDER BY c.id DESC LIMIT 50").fetchall(); c.close()
+    complaints=c.execute("SELECT c.*,u.name FROM complaints c JOIN users u ON u.id=c.user_id ORDER BY c.id DESC LIMIT 50").fetchall()
+    visitors=c.execute("SELECT v.*,u.name,u.phone FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 150").fetchall()
+    errors=c.execute("SELECT e.*,u.name FROM app_errors e LEFT JOIN users u ON u.id=e.user_id WHERE e.resolved=0 ORDER BY e.id DESC LIMIT 100").fetchall()
     settings={k:setting(k) for k in ['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url']}
-    return render_template('admin.html',stats=stats,drivers=drivers,customers=customers,requests=requests,complaints=complaints,settings=settings,admin_path=ADMIN_PATH)
+    c.close()
+    return render_template('admin.html',stats=stats,drivers=drivers,customers=customers,requests=requests,complaints=complaints,settings=settings,admin_path=ADMIN_PATH,visitors=visitors,errors=errors,service_interest=service_interest,service_labels=SERVICES)
 
 @app.route('/promise212324/driver/<int:uid>/action',methods=['POST'])
 @admin_required
@@ -552,6 +650,11 @@ def admin_settings():
     for k in keys:
         if k in request.form: c.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,request.form[k].strip()))
     c.commit(); c.close(); audit('settings_updated','settings',actor_id=current_user()['id']); return redirect(url_for('admin'))
+
+@app.route('/promise212324/error/<int:eid>/resolve',methods=['POST'])
+@admin_required
+def admin_error_resolve(eid):
+    c=get_db(); c.execute('UPDATE app_errors SET resolved=1 WHERE id=?',(eid,)); c.commit(); c.close(); audit('error_resolved','app_error',eid,actor_id=current_user()['id']); return redirect(url_for('admin'))
 
 @app.route('/promise212324/backup')
 @admin_required

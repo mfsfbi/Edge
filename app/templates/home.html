@@ -1,14 +1,11 @@
-{% extends 'base.html' %}{% block title %}O — O-Ride. O-Drive. O-Movers. O-Travels.{% endblock %}{% block content %}
+{% extends 'base.html' %}{% block title %}O{% endblock %}{% block top_title %}Welcome to O{% endblock %}{% block content %}
 <section class="o-splash" id="oSplash"><div class="o-glow">O</div><div class="small splash-note">GOOD TO HAVE YOU HERE</div></section>
-<section class="o-home" id="oHome">
-  <div class="o-brand-intro"><div class="small">WELCOME TO</div><div class="o-mark">O</div><h1>Choose your service today.</h1><p>A friendly place to move, get there, and make the journey easier.</p></div>
-  <div class="services four-services">
-    <a class="card service service-rider" href="/service/bike"><div class="service-icon"></div><h2>O-Ride</h2><div class="small">Boda rides for quick local trips.</div><span class="service-arrow">Ride →</span></a>
-    <a class="card service" href="/service/mover"><div class="service-icon"></div><h2>O-Movers</h2><div class="small">Move homes, offices, furniture and goods.</div><span class="service-arrow">Move →</span></a>
-    <a class="card service" href="/service/ride"><div class="service-icon"></div><h2>O-Drive</h2><div class="small">Book a car for longer or comfortable trips.</div><span class="service-arrow">Drive →</span></a>
-    <a class="card service travel-service" href="{{ otravel_url }}"><div class="service-icon"></div><h2>O-Travels</h2><div class="small">Adventures, retreats and trips where we handle the travel.</div><span class="service-arrow">Explore ↗</span></a>
-  </div>
-  <div class="card share-card"><div><div class="small">SHARE O</div><h2>Bring a friend to O.</h2><div class="small">Scan this QR and they land directly on O's four-service home.</div></div><img src="/qr" alt="O share QR code"></div>
-  <div class="card promise"><div><b>Simple.</b> Transparent fares.</div><div><b>Local.</b> Nearby partners first.</div><div><b>Accountable.</b> Requests, trips, ratings and complaints stay recorded.</div></div>
-</section>
-{% endblock %}{% block scripts %}<script>window.addEventListener('load',()=>setTimeout(()=>document.body.classList.add('o-ready'),1200));</script>{% endblock %}
+<section class="home-intro"><div class="small">WELCOME TO</div><div class="o">O</div><h1>What can we do for you today?</h1><p>Choose where you need us.</p></section>
+<div class="grid4 service-cards">
+<a class="card service" href="/service/bike"><div><div class="eyebrow">O-RIDE</div><h2>O-Ride</h2></div><span class="go">Ride →</span></a>
+<a class="card service" href="/service/mover"><div><div class="eyebrow">O-MOVERS</div><h2>O-Movers</h2></div><span class="go">Move →</span></a>
+<a class="card service" href="/service/ride"><div><div class="eyebrow">O-DRIVE</div><h2>O-Drive</h2></div><span class="go">Drive →</span></a>
+<a class="card service" href="{{ otravel_url }}"><div><div class="eyebrow">O-TRAVELS</div><h2>O-Travels</h2></div><span class="go">Explore →</span></a>
+</div>
+<div class="card share"><div><div class="eyebrow">SHARE O</div><h2>Bring someone with you.</h2><div class="small">Scan to open O.</div></div><img src="/qr" alt="O QR"></div>
+{% endblock %}

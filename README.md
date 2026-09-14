@@ -1,22 +1,22 @@
-# O Mobility PWA
+# O Mobility
 
-O-Ride (boda), O-Drive (car), O-Movers, with O-Travels linking to the existing OTravel site.
+Mobile-first Flask PWA for O-Ride (boda), O-Drive (cars), O-Movers, and O-Travels. O-Travels links to the existing OTravel site.
 
-## Render
-Set exactly two environment variables:
+## Render variables
+Only these two are required:
 
-- `USER_NAME` — private control-room username
-- `PASSWORD` — private control-room password
+- `USER_NAME`
+- `PASSWORD`
 
-Admin is deliberately hidden at `/promise212324`. Normal users never need that path.
+The secret admin entry is `/promise212324`.
 
-Use the included Render Blueprint or attach a persistent disk mounted at `/var/data`. The application automatically falls back to `instance/` when `/var/data` is unavailable, which prevents the PermissionError that occurs on services without a writable `/var/data`.
+Use a persistent disk mounted at `/var/data` for production data retention.
 
-## Start
-`gunicorn --workers 2 --threads 4 --timeout 120 app:app`
+## Public experience
+Visitors can browse anonymously. Pickup can use device location or a searched place; destinations can be searched or selected on the map. The fare estimate appears before requesting.
 
 ## PWA
-The service worker is exposed at `/sw.js` so it can control the whole site scope.
+The app includes root service-worker scope, installable PNG icons, an install prompt when the browser supports it, and a clear fallback instruction for iOS/unsupported browsers.
 
-## Data
-Operational users and trips are never hard-deleted by admin actions. Admin can deactivate users while retaining their history. Backups and JSON exports are available from the control room.
+## Admin
+The control room handles partner verification/deactivation, fares, requests, live partner locations, visitor context, complaints, ratings, audits, and backups. Operational records are retained rather than hard-deleted.
