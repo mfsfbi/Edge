@@ -433,29 +433,40 @@ def customer_service(service):
 @app.route('/O-Drive')
 @app.route('/O-Movers')
 def provider_entry():
-    path=request.path.lower(); service='ride' if 'ride' in path else 'drive' if 'drive' in path else 'mover'
+    path=request.path.lower()
+    service='ride' if 'ride' in path else 'drive' if 'drive' in path else 'mover'
     a=actor()
     if a and a['role']=='partner':
-        if a['service']!=service: return redirect(SERVICE_PATHS[a['service']])
-        return redirect(url_for('partner_home',service=service))
-    return render_template('provider_entry.html',sidebar=nav(),service=service,service_name=SERVICES[service],action='/provider-login')
+        # Never strand a valid partner on an access-denied page: send them to
+        # the dashboard belonging to the service on their account.
+        actual=a['service'] if a['service'] in SERVICES else service
+        return redirect(url_for('partner_home',service=actual))
+    return render_template('provider_entry.html',service=service,service_name=SERVICES[service],action='/provider-login',page_theme='light')
 
 
 @app.post('/provider-login')
 def provider_login_post():
-    service=request.form.get('service'); identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
+    service=request.form.get('service')
+    identifier=request.form.get('username','').strip().lower()
+    pw=request.form.get('password','')
     a=q("SELECT * FROM accounts WHERE lower(username)=? AND active=1 AND role='partner'",(identifier,),True)
-    if a and a['service']==service and check_password_hash(a['password_hash'],pw):
-        session['account_id']=a['id']; return redirect(url_for('partner_home',service=service))
-    return render_template('provider_entry.html',sidebar=nav(),service=service,service_name=SERVICES.get(service,service),action='/provider-login',error='Partner name/username or password is not correct.',page_theme='light')
+    if a and a['service'] in SERVICES and check_password_hash(a['password_hash'],pw):
+        session['account_id']=a['id']
+        return redirect(url_for('partner_home',service=a['service']))
+    return render_template('provider_entry.html',service=service,service_name=SERVICES.get(service,service),action='/provider-login',error='Jina la mtumiaji au nenosiri si sahihi.',page_theme='light')
 
 
 @app.get('/partner/<service>')
 @login_required('partner')
 def partner_home(service):
-    a=actor(); p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
-    if not p or p['service']!=service: abort(403)
-    reqs=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Guest') customer_name FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END, r.id DESC LIMIT 40",(service,p['id'],p['id']))
+    a=actor()
+    p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
+    if not p or p['service'] not in SERVICES:
+        return redirect('/logout')
+    # A partner can only enter their own service workspace. Redirect rather than 403.
+    if p['service']!=service:
+        return redirect(url_for('partner_home',service=p['service']))
+    reqs=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Guest') customer_name,COALESCE(a.phone,'') customer_phone FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END, r.id DESC LIMIT 50",(service,p['id'],p['id']))
     friends=q('SELECT p.*,a.name,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND a.active=1 AND p.id!=? AND p.lat IS NOT NULL AND p.lon IS NOT NULL',(service,p['id']))
     return render_template('partner.html',sidebar=nav('partner',service),partner=p,requests=reqs,friends=friends,service=service,service_name=SERVICES[service],page_theme='light')
 
