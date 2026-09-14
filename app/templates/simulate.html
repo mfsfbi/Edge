@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Simulate O — Control Room{% endblock %}
+{% block top_title %}O Simulation{% endblock %}
+{% block content %}
+<section class="card simulation-page"><div class="eyebrow">SAFE DEMONSTRATION</div><h1 style="margin:.25rem 0 8px">See the full O journey</h1><div class="small">{% if enabled %}Simulation is enabled in Admin.{% else %}Simulation is currently disabled.{% endif %}</div><div class="simulation-track" id="simulationTrack">
+<div class="sim-step" data-state="request"><span>1</span><div><strong>Customer requests</strong><small>Pickup and destination entered</small></div></div>
+<div class="sim-step" data-state="available"><span>2</span><div><strong>Nearest partner found</strong><small>O prefers the closest available partner</small></div></div>
+<div class="sim-step" data-state="assigned"><span>3</span><div><strong>Customer assigned</strong><small>Partner glows green</small></div></div>
+<div class="sim-step" data-state="pickup"><span>4</span><div><strong>Partner approaches</strong><small>Live location and road route update</small></div></div>
+<div class="sim-step" data-state="ontrip"><span>5</span><div><strong>Passenger onboard</strong><small>Trip glows blue</small></div></div>
+<div class="sim-step" data-state="complete"><span>6</span><div><strong>Trip completed</strong><small>Partner returns to available / orange</small></div></div>
+</div><div class="actions" style="margin-top:18px"><button class="btn primary" type="button" onclick="runSimulation()">Run simulation</button><a class="btn" href="/promise212324/control#simulate">Back to control room</a></div></section>
+{% endblock %}
+{% block scripts %}<script>function runSimulation(){const steps=[...document.querySelectorAll('.sim-step')];steps.forEach(x=>x.classList.remove('live','done'));let i=0;const advance=()=>{if(i>0)steps[i-1].classList.add('done');if(i>=steps.length)return;steps[i].classList.add('live');i++;setTimeout(advance,850)};advance()}</script>{% endblock %}

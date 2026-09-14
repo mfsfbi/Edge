@@ -46,7 +46,8 @@ app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, 
 ADMIN_PATH = 'promise212324'
 
 SERVICES = {'bike':'O-Ride','ride':'O-Drive','mover':'O-Movers'}
-PROVIDER_PATHS = {'bike':'/O-Rider','ride':'/O-Drive','mover':'/O-Movers'}
+PROVIDER_PATHS = {'bike':'/O-Ride','ride':'/O-Drive','mover':'/O-Movers'}
+PROVIDER_ALIASES = {'bike':'/O-Rider','ride':'/O-Drive','mover':'/O-Movers'}
 STATUS_COLORS = {'available':'orange','assigned':'green','enroute':'green','on_trip':'blue','offline':'gray'}
 
 
@@ -132,7 +133,7 @@ def init_db():
     defaults={
       'bike_base':'55','bike_per_km':'18','ride_base':'110','ride_per_km':'42',
       'mover_base':'600','mover_per_km':'60','mover_item_fee':'100','mover_helper_fee':'650','platform_commission':'10',
-      'otravel_url':'https://otravel-bleg.onrender.com/','support_phone':'','app_name':'O'
+      'otravel_url':'https://otravel-bleg.onrender.com/','support_phone':'','app_name':'O','simulate':'0'
     }
     for k,v in defaults.items(): c.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,v))
     # Keep admin credentials sourced from Render variables USER_NAME / PASSWORD.
@@ -339,6 +340,32 @@ def geocode_reverse():
     except Exception:
         return jsonify(name='')
 
+@app.route('/api/route')
+def api_route():
+    try:
+        start_lat=float(request.args.get('start_lat')); start_lng=float(request.args.get('start_lng'))
+        end_lat=float(request.args.get('end_lat')); end_lng=float(request.args.get('end_lng'))
+    except (TypeError,ValueError):
+        return jsonify(error='Invalid route coordinates.'),400
+    # Road-following route from OSRM. If the routing service is unavailable,
+    # the client falls back to the two endpoints so the map remains usable.
+    url=(
+        'https://router.project-osrm.org/route/v1/driving/'
+        f'{urllib.parse.quote(str(start_lng))},{urllib.parse.quote(str(start_lat))};'
+        f'{urllib.parse.quote(str(end_lng))},{urllib.parse.quote(str(end_lat))}'
+        '?overview=full&geometries=geojson'
+    )
+    try:
+        req=urllib.request.Request(url,headers={'User-Agent':'O-Mobility/1.0 (road routing)'})
+        with urllib.request.urlopen(req,timeout=10) as r:
+            payload=json.loads(r.read().decode('utf-8'))
+        routes=payload.get('routes') or []
+        if not routes: return jsonify(error='No road route found.'),404
+        route=routes[0]
+        return jsonify(distance_km=round(float(route.get('distance') or 0)/1000,3),duration_min=round(float(route.get('duration') or 0)/60,1),geometry=(route.get('geometry') or {}).get('coordinates',[]))
+    except Exception:
+        return jsonify(error='Road route temporarily unavailable.'),503
+
 @app.route('/api/visitor/context',methods=['POST'])
 def visitor_context():
     d=request.get_json(silent=True) or {}
@@ -458,7 +485,12 @@ def api_request():
 def request_status(rid):
     u=current_user() or get_guest_user(); c=get_db(); r=c.execute('SELECT r.*,d.name driver_name FROM requests r LEFT JOIN users d ON d.id=r.driver_id WHERE r.id=? AND (r.customer_id=? OR r.driver_id=?)',(rid,u['id'],u['id'])).fetchone(); c.close()
     if not r: return jsonify(error='Not found'),404
-    return jsonify(request=dict(r))
+    d=None
+    if r['driver_id']:
+        d=c.execute('SELECT d.lat,d.lng,d.status,d.name FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(r['driver_id'],)).fetchone()
+    c.close()
+    payload=dict(r); payload['driver_lat']=d['lat'] if d else None; payload['driver_lng']=d['lng'] if d else None; payload['driver_status']=d['status'] if d else None; payload['driver_name']=d['name'] if d else payload.get('driver_name')
+    return jsonify(request=payload)
 
 @app.route('/api/request/<int:rid>/action',methods=['POST'])
 @login_required
@@ -518,7 +550,7 @@ def driver_dashboard_view(d):
     completed=c.execute("SELECT COUNT(*) n FROM requests WHERE driver_id=? AND service=? AND status='completed'",(u['id'],d['service'])).fetchone()['n']
     earnings=c.execute("SELECT COALESCE(SUM(fare),0) n FROM requests WHERE driver_id=? AND service=? AND status='completed'",(u['id'],d['service'])).fetchone()['n']
     c.close()
-    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']],pending=pending,completed=completed,earnings=earnings)
+    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']],pending=pending,completed=completed,earnings=earnings,provider_location={'lat':d['lat'],'lng':d['lng']} if d['lat'] is not None and d['lng'] is not None else None)
 
 @app.route('/O-Rider')
 @app.route('/O-Ride')
@@ -616,7 +648,7 @@ def admin_service(service):
     if service not in SERVICES: return jsonify(error='Unknown service'),404
     c=get_db()
     drivers=c.execute("SELECT d.user_id,d.service,d.status,d.lat,d.lng,d.rating,u.name,u.phone,u.active,u.verified FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.service=? AND u.active=1",(service,)).fetchall()
-    requests=c.execute("SELECT r.id,r.pickup,r.destination,r.fare,r.status,r.created_at,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id WHERE r.service=? ORDER BY r.id DESC LIMIT 100",(service,)).fetchall()
+    requests=c.execute("SELECT r.id,r.pickup,r.destination,r.pickup_lat,r.pickup_lng,r.dest_lat,r.dest_lng,r.fare,r.status,r.created_at,u.name customer_name,d.name driver_name FROM requests r JOIN users u ON u.id=r.customer_id LEFT JOIN users d ON d.id=r.driver_id WHERE r.service=? ORDER BY r.id DESC LIMIT 100",(service,)).fetchall()
     c.close()
     return jsonify(service=service,drivers=[dict(x) for x in drivers],requests=[dict(x) for x in requests])
 
@@ -647,9 +679,22 @@ def admin():
     complaints=c.execute("SELECT c.*,u.name FROM complaints c JOIN users u ON u.id=c.user_id ORDER BY c.id DESC LIMIT 50").fetchall()
     visitors=c.execute("SELECT v.*,u.name,u.phone,u.role,u.is_guest, CASE WHEN u.role='driver' THEN 'Partner' WHEN u.role='customer' AND u.is_guest=1 THEN 'Guest customer' WHEN u.role='customer' THEN 'Customer' WHEN u.role='admin' THEN 'Admin' ELSE 'Visitor' END person_type FROM visitors v LEFT JOIN users u ON u.id=v.user_id ORDER BY v.last_seen DESC LIMIT 150").fetchall()
     errors=c.execute("SELECT e.*,u.name FROM app_errors e LEFT JOIN users u ON u.id=e.user_id WHERE e.resolved=0 ORDER BY e.id DESC LIMIT 100").fetchall()
-    settings={k:setting(k) for k in ['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url']}
+    settings={k:setting(k) for k in ['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url','simulate']}
     c.close()
     return render_template('admin.html',stats=stats,drivers=drivers,customers=customers,requests=requests,complaints=complaints,settings=settings,admin_path=ADMIN_PATH,visitors=visitors,errors=errors,service_interest=service_interest,service_labels=SERVICES)
+
+@app.route('/promise212324/simulate')
+@admin_required
+def admin_simulate():
+    return render_template('simulate.html',enabled=setting('simulate','0')=='1',service_labels=SERVICES)
+
+@app.route('/promise212324/simulate/toggle',methods=['POST'])
+@admin_required
+def admin_simulate_toggle():
+    enabled='1' if request.form.get('simulate')=='1' else '0'
+    c=get_db(); c.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('simulate',enabled)); c.commit(); c.close()
+    audit('simulation_toggled','settings',details=f'enabled={enabled}',actor_id=current_user()['id'])
+    return redirect(url_for('admin'))
 
 @app.route('/promise212324/partner/add',methods=['POST'])
 @admin_required
@@ -697,7 +742,7 @@ def admin_complaint(cid):
 @app.route('/promise212324/settings',methods=['POST'])
 @admin_required
 def admin_settings():
-    keys=['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url']
+    keys=['bike_base','bike_per_km','ride_base','ride_per_km','mover_base','mover_per_km','mover_item_fee','mover_helper_fee','platform_commission','otravel_url','simulate']
     c=get_db();
     for k in keys:
         if k in request.form: c.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,request.form[k].strip()))
