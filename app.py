@@ -45,7 +45,8 @@ app.secret_key = SECRET_KEY
 app.config.update(MAX_CONTENT_LENGTH=5*1024*1024, SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')))
 ADMIN_PATH = 'promise212324'
 
-SERVICES = {'bike':'O-Bikes','ride':'O-Ride','mover':'O-Movers'}
+SERVICES = {'bike':'O-Ride','ride':'O-Drive','mover':'O-Movers'}
+PROVIDER_PATHS = {'bike':'/O-Ride','ride':'/O-Drive','mover':'/O-Movers'}
 STATUS_COLORS = {'available':'orange','assigned':'green','enroute':'green','on_trip':'blue','offline':'gray'}
 
 
@@ -292,9 +293,11 @@ def login():
         phone=request.form.get('phone','').strip(); pwd=request.form.get('password','')
         c=get_db(); u=c.execute('SELECT * FROM users WHERE phone=?',(phone,)).fetchone(); c.close()
         if u and u['active'] and u['password_hash'] and check_password_hash(u['password_hash'],pwd):
-            session['uid']=u['id']; audit('login','user',u['id'],actor_id=u['id']); return redirect(url_for('dashboard'))
-        return render_template('login.html',error='Invalid credentials or inactive account.')
-    return render_template('login.html',error=None)
+            session['uid']=u['id']; audit('login','user',u['id'],actor_id=u['id']); nxt=request.form.get('next') or request.args.get('next') or ''
+            if nxt.startswith('/') and not nxt.startswith('//') and nxt != '/admin': return redirect(nxt)
+            return redirect(url_for('dashboard'))
+        return render_template('login.html',error='Invalid credentials or inactive account.',next=request.form.get('next') or request.args.get('next',''))
+    return render_template('login.html',error=None,next=request.args.get('next',''))
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('home'))
 @app.route('/dashboard')
@@ -403,13 +406,42 @@ def notifications():
 def notifications_read():
     u=current_user(); c=get_db(); c.execute('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL',(now(),u['id'])); c.commit(); c.close(); return jsonify(ok=True)
 
+def provider_entry(service):
+    u=current_user()
+    target=PROVIDER_PATHS[service]
+    if not u:
+        return redirect(url_for('login', next=target))
+    if u['role']!='driver':
+        abort(404)
+    c=get_db(); d=c.execute('SELECT d.*,u.name,u.phone,u.verified,u.active FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(u['id'],)).fetchone(); c.close()
+    if not d or d['service']!=service or not d['active']:
+        abort(404)
+    return driver_dashboard_view(d)
+
+def driver_dashboard_view(d):
+    u=current_user()
+    c=get_db(); jobs=c.execute('SELECT r.*,u.name customer_name FROM requests r JOIN users u ON u.id=r.customer_id WHERE r.driver_id=? ORDER BY r.id DESC LIMIT 30',(u['id'],)).fetchall(); c.close()
+    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']])
+
+@app.route('/O-Ride')
+def provider_ride():
+    return provider_entry('bike')
+
+@app.route('/O-Drive')
+def provider_drive():
+    return provider_entry('ride')
+
+@app.route('/O-Movers')
+def provider_movers():
+    return provider_entry('mover')
+
 @app.route('/driver')
-@login_required
-def driver_dashboard():
-    u=current_user();
-    if u['role']!='driver': return redirect(url_for('dashboard'))
-    c=get_db(); d=c.execute('SELECT d.*,u.name,u.phone,u.verified,u.active FROM drivers d JOIN users u ON u.id=d.user_id WHERE d.user_id=?',(u['id'],)).fetchone(); jobs=c.execute('SELECT r.*,u.name customer_name FROM requests r JOIN users u ON u.id=r.customer_id WHERE r.driver_id=? ORDER BY r.id DESC LIMIT 30',(u['id'],)).fetchall(); c.close()
-    return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs)
+def driver_dashboard_legacy():
+    u=current_user()
+    if not u or u['role']!='driver': return redirect(url_for('login'))
+    c=get_db(); d=c.execute('SELECT * FROM drivers WHERE user_id=?',(u['id'],)).fetchone(); c.close()
+    if not d: abort(404)
+    return redirect(PROVIDER_PATHS.get(d['service'],'/'))
 @app.route('/api/driver/presence',methods=['POST'])
 @login_required
 def driver_presence():

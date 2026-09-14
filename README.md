@@ -1,6 +1,6 @@
 # O Mobility PWA
 
-O-Bikes, O-Ride and O-Movers, with O-Travel linking to the existing OTravel site.
+O-Ride (boda), O-Drive (car), O-Movers, with O-Travels linking to the existing OTravel site.
 
 ## Render
 Set exactly two environment variables:
