@@ -17,7 +17,7 @@ os.makedirs(DATA, exist_ok=True)
 DB = os.path.join(DATA, 'o_system_v1.db')
 
 SERVICES = {'ride': 'O-Ride', 'drive': 'O-Drive', 'mover': 'O-Movers'}
-SERVICE_PATHS = {'ride': '/O-Ride', 'drive': '/O-Drive', 'mover': '/O-Movers'}
+PARTNER_DASH = {'ride':'/partners/ride/dashboard','drive':'/partners/drive/dashboard','mover':'/partners/mover/dashboard'}
 THEMES = {'light', 'cream', 'mint', 'sky'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS accounts(
@@ -197,18 +197,10 @@ def nav(role='customer', service=None):
         </details>
         <a class="navbtn" href="/promise212324/logout">Sign out</a></nav>'''
     if role == 'partner_entry':
-        return '''<nav>
-        <a class="navbtn" href="/services">Back to O Services</a>
-        <a class="navbtn" href="/qr">O QR</a>
-        </nav>'''
+        return '<nav><a class="navbtn" href="/services">O Services</a><a class="navbtn" href="/qr">O QR</a></nav>'
     if role == 'partner':
-        return f'''<nav>
-        <a class="navbtn active" href="{SERVICE_PATHS.get(service, '/')}"><span data-t="sw">{SERVICES.get(service, 'Huduma')} Dashibodi</span><span data-t="en">{SERVICES.get(service, 'Service')} Dashboard</span></a>
-        <a class="navbtn" href="/partner/requests"><span data-t="sw">Kazi</span><span data-t="en">Jobs</span></a>
-        <a class="navbtn" href="/partner/earnings"><span data-t="sw">Mapato</span><span data-t="en">Earnings</span></a>
-        <a class="navbtn" href="/partner/ratings"><span data-t="sw">Tathmini</span><span data-t="en">Ratings</span></a>
-        <a class="navbtn" href="/partner/help"><span data-t="sw">Msaada</span><span data-t="en">Help</span></a>
-        <a class="navbtn" href="/logout"><span data-t="sw">Toka</span><span data-t="en">Sign out</span></a></nav>'''
+        dash = PARTNER_DASH.get(service, '/partners')
+        return f'<nav><a class="navbtn active" href="{dash}"><span data-partner-sw>Dashibodi</span><span data-partner-en>Dashboard</span></a><a class="navbtn" href="{dash}?tab=jobs"><span data-partner-sw>Kazi</span><span data-partner-en>Jobs</span></a><a class="navbtn" href="{dash}?tab=earnings"><span data-partner-sw>Mapato</span><span data-partner-en>Earnings</span></a><a class="navbtn" href="{dash}?tab=ratings"><span data-partner-sw>Tathmini</span><span data-partner-en>Ratings</span></a><a class="navbtn" href="{dash}?tab=help"><span data-partner-sw>Msaada</span><span data-partner-en>Help</span></a><a class="navbtn" href="/logout"><span data-partner-sw>Toka</span><span data-partner-en>Sign out</span></a></nav>'
     if session.get('account_id'):
         return '''<nav>
         <a class="navbtn active" href="/services">Services</a>
@@ -350,7 +342,7 @@ def login():
         a=q('SELECT * FROM accounts WHERE active=1 AND (lower(username)=? OR lower(name)=? OR replace(phone," ","")=?) ORDER BY id LIMIT 1',(identifier,identifier,identifier.replace(' ','')),True)
         if a and check_password_hash(a['password_hash'],pw):
             session['account_id']=a['id']
-            return redirect(SERVICE_PATHS.get(a['service'],'/services') if a['role']=='partner' else (next_url if next_url.startswith('/') else '/services'))
+            return redirect(PARTNER_DASH.get(a['service'],'/partners') if a['role']=='partner' else (next_url if next_url.startswith('/') else '/services'))
         err='The name/username or password is not correct.'
     return render_template('login.html',sidebar=nav(),error=err,page_theme='light')
 
@@ -434,128 +426,77 @@ def customer_service(service):
     return render_template('service.html',sidebar=nav(),service=service,service_name=SERVICES[service],page_theme=(a['theme'] if a else 'light'))
 
 
-@app.route('/O-Ride')
-@app.route('/O-Drive')
-@app.route('/O-Movers')
-def provider_entry():
-    path=request.path.lower(); service='ride' if 'ride' in path else 'drive' if 'drive' in path else 'mover'
+@app.get('/partners')
+def partners_entry():
+    return render_template('partners.html', sidebar=nav('partner_entry'), page_theme='light')
+
+@app.route('/partners/<service>', methods=['GET','POST'])
+def partners_login(service):
+    if service not in SERVICES: abort(404)
     a=actor()
     if a and a['role']=='partner':
-        if a['service']!=service: return redirect(SERVICE_PATHS[a['service']])
-        return redirect(url_for('partner_home',service=service))
-    return render_template('provider_entry.html',sidebar=nav('partner_entry',service),service=service,service_name=SERVICES[service],action='/provider-login',page_theme='light')
+        return redirect(PARTNER_DASH[service]) if a['service']==service else redirect('/partners')
+    error=''
+    if request.method=='POST':
+        identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
+        a=q("SELECT * FROM accounts WHERE active=1 AND role='partner' AND lower(username)=?",(identifier,),True)
+        if a and a['service']==service and check_password_hash(a['password_hash'],pw):
+            session['account_id']=a['id']; return redirect(PARTNER_DASH[service])
+        error='Jina la mtumiaji au nenosiri si sahihi.'
+    titles={'ride':('Rider','Mendesha pikipiki'),'drive':('Driver','Dereva wa gari'),'mover':('Mover','Mtoa huduma za kuhama')}
+    return render_template('partner_login.html', sidebar=nav('partner_entry'), service=service, service_name=SERVICES[service], role_title=titles[service][0], role_sub=titles[service][1], error=error, page_theme='light')
 
-
-@app.post('/provider-login')
-def provider_login_post():
-    service=request.form.get('service'); identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
-    a=q("SELECT * FROM accounts WHERE lower(username)=? AND active=1 AND role='partner'",(identifier,),True)
-    if a and a['service']==service and check_password_hash(a['password_hash'],pw):
-        session['account_id']=a['id']; return redirect(url_for('partner_home',service=service))
-    return render_template('provider_entry.html',sidebar=nav('partner_entry',service),service=service,service_name=SERVICES.get(service,service),action='/provider-login',error='Partner name/username or password is not correct.',page_theme='light')
-
-
-@app.get('/partner/<service>')
+@app.get('/partners/<service>/dashboard')
 @login_required('partner')
-def partner_home(service):
-    a=actor(); p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
+def partner_dashboard(service):
+    a=actor()
+    if a['service']!=service: return redirect(PARTNER_DASH.get(a['service'],'/partners'))
+    p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
     if not p: abort(404)
-    if p['service']!=service: return redirect(SERVICE_PATHS.get(p['service'],'/services'))
-    reqs=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Guest') customer_name FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END, r.id DESC LIMIT 40",(service,p['id'],p['id']))
-    friends=q('SELECT p.*,a.name,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND a.active=1 AND p.id!=? AND p.lat IS NOT NULL AND p.lon IS NOT NULL',(service,p['id']))
-    template = {'ride':'partner_ride.html','drive':'partner_drive.html','mover':'partner_mover.html'}[service]
-    return render_template(template,sidebar=nav('partner',service),partner=p,requests=reqs,friends=friends,service=service,service_name=SERVICES[service],page_theme='light')
-
+    reqs=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Mteja') customer_name,COALESCE(a.phone,'') customer_phone FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END,r.id DESC LIMIT 60",(service,p['id'],p['id']))
+    friends=q('SELECT p.*,a.name,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND p.id!=? AND a.active=1 AND p.lat IS NOT NULL AND p.lon IS NOT NULL',(service,p['id']))
+    return render_template({'ride':'partner_ride.html','drive':'partner_drive.html','mover':'partner_mover.html'}[service],sidebar=nav('partner',service),partner=p,requests=reqs,friends=friends,service=service,service_name=SERVICES[service],page_theme='light')
 
 @app.post('/api/partner/status')
 @login_required('partner')
 def partner_status():
-    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}
-    status=data.get('status','orange')
+    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}; status=data.get('status','orange')
     if status not in ('offline','orange','green','blue'): status='orange'
-    lat=data.get('lat'); lon=data.get('lon')
-    speed=0.0
-    try:
-        if lat is not None and lon is not None and p['lat'] is not None and p['lon'] is not None and p['last_seen']:
-            t0=datetime.fromisoformat(p['last_seen']); dt=max((datetime.now(timezone.utc)-t0).total_seconds()/3600,0.001)
-            km=math.hypot((float(lat)-p['lat'])*111,(float(lon)-p['lon'])*111*math.cos(math.radians(float(lat))))
-            speed=min(km/dt,160)
-    except Exception:
-        speed=0.0
-    db().execute('UPDATE partners SET status=?,lat=?,lon=?,speed_kmh=?,last_seen=? WHERE id=?',(status,lat,lon,speed,now(),p['id']))
-    return jsonify(ok=True,status=status,speed_kmh=round(speed,1))
-
+    lat=data.get('lat'); lon=data.get('lon'); db().execute('UPDATE partners SET status=?,lat=?,lon=?,last_seen=? WHERE id=?',(status,lat,lon,now(),p['id']))
+    return jsonify(ok=True,status=status,speed_kmh=0)
 
 @app.post('/api/partner/request')
 @login_required('partner')
 def partner_request():
-    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}; rid=int(data.get('request_id')); act=data.get('action')
-    r=q('SELECT * FROM requests WHERE id=? AND service=?',(rid,p['service']),True)
+    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}; rid=int(data.get('request_id')); act=data.get('action'); r=q('SELECT * FROM requests WHERE id=? AND service=?',(rid,p['service']),True)
     if not r: return jsonify(ok=False,error='Request not found'),404
-    if act=='decline' and r['status'] in ('requested','assigned') and (r['partner_id'] in (None,p['id'])):
-        if r['partner_id']==p['id']: db().execute("UPDATE requests SET partner_id=NULL,status='requested',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange' WHERE id=?",(p['id'],))
-    elif act=='accept' and r['status']=='requested':
-        if p['status'] != 'orange': return jsonify(ok=False,error='Set your status to Available before accepting a customer.'),409
+    if act=='accept' and r['status']=='requested':
         changed=db().execute("UPDATE requests SET partner_id=?,status='assigned',updated_at=? WHERE id=? AND partner_id IS NULL AND status='requested'",(p['id'],now(),rid)).rowcount
-        if changed:
-            db().execute("UPDATE partners SET status='green' WHERE id=?",(p['id'],))
-        else:
-            return jsonify(ok=False,error='That customer has already been taken by another partner.'),409
+        if not changed: return jsonify(ok=False,error='Mteja tayari amechukuliwa.'),409
+        db().execute("UPDATE partners SET status='green' WHERE id=?",(p['id'],))
     elif act=='start' and r['partner_id']==p['id']:
         db().execute("UPDATE requests SET status='on_trip',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='blue' WHERE id=?",(p['id'],))
     elif act=='complete' and r['partner_id']==p['id']:
         db().execute("UPDATE requests SET status='completed',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange',completed=completed+1,earnings=earnings+COALESCE(?,0) WHERE id=?",(r['fare'],p['id']))
+    elif act=='release' and r['partner_id']==p['id']:
+        db().execute("UPDATE requests SET partner_id=NULL,status='requested',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange' WHERE id=?",(p['id'],))
     return jsonify(ok=True)
-
-
-@app.get('/api/partner/dashboard')
-@login_required('partner')
-def partner_dashboard_api():
-    a=actor(); p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
-    if not p: return jsonify(ok=False),404
-    rows=q("SELECT r.id,r.customer_id,r.guest_name,r.pickup_name,r.destination_name,r.fare,r.payment,r.status,r.created_at,COALESCE(a.name,r.guest_name,'Guest') customer_name,COALESCE(a.phone,'') customer_phone FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY r.id DESC LIMIT 50",(p['service'],p['id']))
-    return jsonify(ok=True,partner=dict(p),requests=[dict(r) for r in rows])
 
 @app.get('/api/partner/live')
 @login_required('partner')
 def partner_live():
     a=actor(); p=q('SELECT p.*,a.name,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
     if not p: return jsonify(ok=False),404
-    open_rows=q("SELECT r.id,r.partner_id,r.service,r.pickup_name,r.destination_name,r.pickup_lat,r.pickup_lon,r.dest_lat,r.dest_lon,r.fare,r.payment,r.status,r.created_at,COALESCE(a.name,r.guest_name,'Mteja') customer_name,COALESCE(a.phone,'') customer_phone FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND ((r.partner_id=? AND r.status IN ('assigned','on_trip')) OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY r.created_at ASC LIMIT 80",(p['service'],p['id']))
-    out=[]
-    for r in open_rows:
-        d=None
-        if p['lat'] is not None and p['lon'] is not None and r['pickup_lat'] is not None and r['pickup_lon'] is not None:
-            d=math.hypot((r['pickup_lat']-p['lat'])*111,(r['pickup_lon']-p['lon'])*111*math.cos(math.radians(float(p['lat']))))
-        item=dict(r); item['distance_km']=round(d,2) if d is not None else None; item['mine']=(r['partner_id'] if 'partner_id' in r.keys() else None)==p['id']
-        out.append(item)
-    out.sort(key=lambda x: (x['distance_km'] is None, x['distance_km'] if x['distance_km'] is not None else 1e9, x['created_at']))
-    nearby=[dict(x) for x in q("SELECT p.id,p.service,p.status,p.lat,p.lon,p.speed_kmh,a.name FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND p.id!=? AND a.active=1 AND p.lat IS NOT NULL AND p.lon IS NOT NULL",(p['service'],p['id']))]
-    return jsonify(ok=True,partner=dict(p),requests=out,partners=nearby,server_time=now())
-
-
-@app.get('/partner/requests')
-@login_required('partner')
-def partner_requests(): return redirect(url_for('partner_home',service=actor()['service']))
-
-@app.get('/partner/earnings')
-@login_required('partner')
-def partner_earnings():
-    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True)
-    return render_template('partner_info.html',sidebar=nav('partner',p['service']),heading='Earnings',partner=p,message=f"KES {p['earnings']:.0f} recorded on completed trips.",page_theme='light')
-
-@app.get('/partner/ratings')
-@login_required('partner')
-def partner_ratings():
-    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); rows=q('SELECT x.*,a.name customer_name FROM ratings x LEFT JOIN accounts a ON a.id=x.customer_id WHERE x.partner_id=? ORDER BY x.id DESC',(p['id'],))
-    return render_template('partner_ratings.html',sidebar=nav('partner',p['service']),partner=p,rows=rows,page_theme='light')
-
-@app.get('/partner/help')
-@login_required('partner')
-def partner_help():
-    a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True)
-    return render_template('partner_help.html',sidebar=nav('partner',p['service']),partner=p,service=p['service'],service_name=SERVICES[p['service']],page_theme='light')
-
+    rows=q("SELECT r.id,r.partner_id,r.service,r.pickup_name,r.destination_name,r.pickup_lat,r.pickup_lon,r.dest_lat,r.dest_lon,r.fare,r.payment,r.status,r.created_at,r.item_count,r.helper_count,COALESCE(a.name,r.guest_name,'Mteja') customer_name,COALESCE(a.phone,'') customer_phone FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND ((r.partner_id=? AND r.status IN ('assigned','on_trip')) OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY r.created_at ASC LIMIT 80",(p['service'],p['id']))
+    jobs=[]
+    for r in rows:
+        item=dict(r); item['mine']=r['partner_id']==p['id']; item['distance_km']=None
+        if p['lat'] is not None and p['lon'] is not None and r['pickup_lat'] is not None:
+            item['distance_km']=round(math.hypot((r['pickup_lat']-p['lat'])*111,(r['pickup_lon']-p['lon'])*111*math.cos(math.radians(float(p['lat'])))),2)
+        jobs.append(item)
+    jobs.sort(key=lambda x:(not x['mine'],x['distance_km'] is None,x['distance_km'] or 1e9,x['created_at']))
+    near=[dict(x) for x in q("SELECT p.id,p.service,p.status,p.lat,p.lon,p.speed_kmh,a.name FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND p.id!=? AND a.active=1 AND p.lat IS NOT NULL AND p.lon IS NOT NULL",(p['service'],p['id']))]
+    return jsonify(ok=True,partner=dict(p),requests=jobs,partners=near,server_time=now())
 
 @app.get('/api/partners/map')
 def partners_map():
