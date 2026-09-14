@@ -488,13 +488,34 @@ def partner_request():
     if act=='decline' and r['status'] in ('requested','assigned') and (r['partner_id'] in (None,p['id'])):
         if r['partner_id']==p['id']: db().execute("UPDATE requests SET partner_id=NULL,status='requested',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange' WHERE id=?",(p['id'],))
     elif act=='accept' and r['status']=='requested':
-        db().execute("UPDATE requests SET partner_id=?,status='assigned',updated_at=? WHERE id=? AND partner_id IS NULL AND status='requested'",(p['id'],now(),rid))
-        if db().execute('SELECT changes()').fetchone()[0]: db().execute("UPDATE partners SET status='green' WHERE id=?",(p['id'],))
+        conn=db(); conn.execute('BEGIN IMMEDIATE')
+        changed=conn.execute("UPDATE requests SET partner_id=?,status='assigned',updated_at=? WHERE id=? AND partner_id IS NULL AND status='requested' AND EXISTS (SELECT 1 FROM partners px WHERE px.id=? AND px.status='orange')",(p['id'],now(),rid,p['id'])).rowcount
+        if changed: conn.execute("UPDATE partners SET status='green' WHERE id=?",(p['id'],))
+        conn.execute('COMMIT')
+        if not changed: return jsonify(ok=False,error='Another partner has already taken this customer, or you are not available.'),409
     elif act=='start' and r['partner_id']==p['id']:
         db().execute("UPDATE requests SET status='on_trip',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='blue' WHERE id=?",(p['id'],))
     elif act=='complete' and r['partner_id']==p['id']:
         db().execute("UPDATE requests SET status='completed',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange',completed=completed+1,earnings=earnings+COALESCE(?,0) WHERE id=?",(r['fare'],p['id']))
     return jsonify(ok=True)
+
+
+@app.get('/api/partner/live')
+@login_required('partner')
+def partner_live():
+    a=actor(); p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
+    if not p: return jsonify(ok=False),404
+    service=p['service']
+    rows=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Guest') customer_name,COALESCE(a.phone,'') customer_phone,r.pickup_lat customer_lat,r.pickup_lon customer_lon FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.status='requested' OR (r.partner_id=? AND r.status IN ('assigned','on_trip'))) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END, r.id DESC",(service,p['id'],p['id']))
+    friends=q("SELECT p.id,p.service,p.status,p.lat,p.lon,p.speed_kmh,p.rating,a.name,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND a.active=1 AND p.lat IS NOT NULL AND p.lon IS NOT NULL ORDER BY p.id",(service,))
+    result=[]
+    for r in rows:
+        z=dict(r); z['distance_km']=None
+        if r['customer_lat'] is not None and p['lat'] is not None:
+            z['distance_km']=round(math.hypot((r['customer_lat']-p['lat'])*111,(r['customer_lon']-p['lon'])*111*math.cos(math.radians(float(p['lat'])))),2)
+        result.append(z)
+    result.sort(key=lambda z:(0 if z['partner_id']==p['id'] else 1, z['distance_km'] if z['distance_km'] is not None else 9999, z['id']))
+    return jsonify(ok=True,partner=dict(p),requests=result,friends=[dict(x) for x in friends])
 
 
 @app.get('/api/partner/dashboard')
@@ -634,13 +655,10 @@ def create_request():
         t=now()
         cur=conn.execute('INSERT INTO requests(customer_id,guest_name,service,pickup_name,destination_name,pickup_lat,pickup_lon,dest_lat,dest_lon,fare,payment,status,created_at,updated_at,item_count,helper_count) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(a['id'] if a else None,guest,service,pickup.get('name','Pickup'),dest.get('name','Destination'),pickup['lat'],pickup['lon'],dest['lat'],dest['lon'],fare,data.get('payment','Cash'),'requested',t,t,int(data.get('item_count') or 0),int(data.get('helper_count') or 0)))
         rid=cur.lastrowid
-        scored=partner_candidates(conn,service,float(pickup['lat']),float(pickup['lon']))
-        if scored:
-            _,_,candidate=scored[0]
-            changed=conn.execute("UPDATE partners SET status='green' WHERE id=? AND status='orange'",(candidate['id'],)).rowcount
-            if changed:
-                conn.execute("UPDATE requests SET partner_id=?,status='assigned',updated_at=? WHERE id=?",(candidate['id'],t,rid)); best=candidate
+        # Request remains open until an eligible partner accepts it.
         conn.execute('COMMIT')
+        scored=partner_candidates(db(),service,float(pickup['lat']),float(pickup['lon']))
+        best=scored[0][2] if scored else None
     except Exception:
         try: conn.execute('ROLLBACK')
         except Exception: pass
