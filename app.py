@@ -103,15 +103,37 @@ def services():
 def qr_page():
  log_event('qr'); return render_template('qr.html',sidebar=nav(),page_theme='light')
 
-@app.get('/qr-image.png')
+@app.get('/qr-image.svg')
 def qr_image():
     target = request.url_root.rstrip('/') + '/'
-    image = qrcode.make(target)
-    buf = io.BytesIO()
-    image.save(buf, format='PNG')
-    resp = app.response_class(buf.getvalue(), mimetype='image/png')
+    qr = qrcode.QRCode(border=4, box_size=8)
+    qr.add_data(target)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()
+    n = len(matrix)
+    modules = []
+    for y, row in enumerate(matrix):
+        for x, dark in enumerate(row):
+            if dark:
+                modules.append(f'<rect x="{x}" y="{y}" width="1" height="1"/>')
+    svg = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {n} {n}" shape-rendering="crispEdges">'
+        '<rect width="100%" height="100%" fill="white"/>'
+        '<g fill="#111827">' + ''.join(modules) + '</g></svg>'
+    )
+    resp = app.response_class(svg, mimetype='image/svg+xml')
     resp.headers['Cache-Control'] = 'no-store, max-age=0'
     return resp
+
+@app.get('/qr-image.png')
+def qr_image_png_compat():
+    # Keep one compatibility URL, but serve the pure-SVG QR safely without Pillow.
+    return qr_image()
+
+@app.get('/sw.js')
+def root_service_worker():
+    return app.send_static_file('sw.js')
 
 
 @app.route('/account/register',methods=['GET','POST'])

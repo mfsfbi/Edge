@@ -23,9 +23,9 @@
 </style>
 {% block head %}{% endblock %}</head><body>
 <div class="top"><button class="hamb" id="openDrawer" aria-label="menu"><span></span><span></span><span></span></button><strong>O</strong></div>
-<div class="drawer" id="drawer"><div class="panel"><div class="brand"><img src="/static/logo.svg"><strong>O</strong></div><div id="drawerNav"></div><a class="side-qr drawer-qr" href="/qr" aria-label="Open O QR"><img src="/qr-image.png" alt="O QR code"><span>Scan O</span></a><div class="sidefooter">All rights reserved.</div></div></div>
+<div class="drawer" id="drawer"><div class="panel"><div class="brand"><img src="/static/logo.svg"><strong>O</strong></div><div id="drawerNav"></div><a class="side-qr drawer-qr" href="/qr" aria-label="Open O QR"><img src="/qr-image.svg" alt="O QR code"><span>Scan O</span></a><div class="sidefooter">All rights reserved.</div></div></div>
 <div class="shell {% if session.get("account_id") %}logged-bright{% endif %}">
-<aside class="side"><a class="brand" href="/"><img src="/static/logo.svg"><strong>O</strong></a>{{ sidebar|safe }}<a class="side-qr" href="/qr" aria-label="Open O QR"><img src="/qr-image.png" alt="O QR code"><span>Scan O</span></a><div class="sidefooter">All rights reserved.</div></aside>
+<aside class="side"><a class="brand" href="/"><img src="/static/logo.svg"><strong>O</strong></a>{{ sidebar|safe }}<a class="side-qr" href="/qr" aria-label="Open O QR"><img src="/qr-image.svg" alt="O QR code"><span>Scan O</span></a><div class="sidefooter">All rights reserved.</div></aside>
 <main class="main"><div class="content">{% block content %}{% endblock %}<div class="footer">All rights reserved.</div></div></main>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
