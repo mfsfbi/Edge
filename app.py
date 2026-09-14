@@ -514,10 +514,23 @@ def nearby_partners():
 
 @app.get('/api/request/<int:rid>')
 def request_status(rid):
-    r=q('SELECT r.*,p.lat partner_lat,p.lon partner_lon,p.status partner_status,p.speed_kmh partner_speed,a.name partner_name,a.phone partner_phone FROM requests r LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE r.id=?',(rid,),True)
+    r=q('SELECT r.*,p.lat partner_lat,p.lon partner_lon,p.status partner_status,p.speed_kmh partner_speed,p.rating partner_rating,p.vehicle partner_vehicle,p.plate partner_plate,a.name partner_name,a.phone partner_phone FROM requests r LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE r.id=?',(rid,),True)
     if not r: return jsonify(ok=False),404
     return jsonify(dict(r))
 
+
+
+@app.get('/api/partner/<int:pid>/profile')
+def partner_profile(pid):
+    p=q("SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.id=? AND a.active=1",(pid,),True)
+    if not p: return jsonify(ok=False,error='Partner not found'),404
+    reviews=q("SELECT r.partner_rating,r.note,r.created_at,c.name customer_name FROM ratings r LEFT JOIN accounts c ON c.id=r.customer_id WHERE r.partner_id=? AND r.partner_rating IS NOT NULL ORDER BY r.id DESC LIMIT 8",(pid,))
+    avg=p['rating'] or 0
+    return jsonify(ok=True,partner={
+        'id':p['id'],'name':p['name'],'service':p['service'],'phone':p['phone'],'rating':round(float(avg),1),
+        'completed':p['completed'],'vehicle':p['vehicle'],'plate':p['plate'],'status':p['status'],
+        'reviews':[{'rating':r['partner_rating'],'note':r['note'] or '', 'name':r['customer_name'] or 'Customer','date':r['created_at']} for r in reviews]
+    })
 
 @app.get('/api/admin/live-map')
 @admin_required

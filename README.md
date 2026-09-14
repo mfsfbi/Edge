@@ -1,37 +1,24 @@
-# O-System V1 — Restored Operations Build
+# O-System V1 — Complete Customer UI Build
 
-This build restores the complete customer, partner and admin product surface and keeps the newer dispatch behavior.
+This build keeps the full customer, partner, admin, feedback, QR, PWA and dispatch surfaces and adds a redesigned customer trip interface.
 
-## Public/customer
-- Guest access to core services
-- Optional customer account, trips, ratings, appearance and account settings
-- Guest/customer help, concern, complaint or request
-- Always-visible deployment-aware O QR
-- Bright service/customer interface
+## Customer experience
+- Bright customer UI with service picker and live map together.
+- Pickup is taken from browser geolocation automatically; editing pickup is optional.
+- Destination search suggests nearby/recognized places while typing, with map selection as an alternative.
+- Road geometry comes from OSRM rather than straight-line drawings.
+- Available partners appear on the map only after a service is selected.
+- Tapping a partner marker opens rating average, completed-trip count, vehicle details and recent written reviews.
+- After assignment the customer's map focuses on the assigned partner; the pickup route is shown while approaching and the destination route is shown after trip start.
+- Customer app ratings and per-partner trip ratings use real 1–5 star controls; partner averages are calculated from submitted trip ratings.
+- Guest users can request services and submit help/complaints; registered customers get trips, ratings, account and appearance features.
 
-## Partners
-- `/O-Ride`, `/O-Drive`, `/O-Movers`
-- Admin-created partner accounts
-- Orange available / green assigned / blue onboard status
-- Location-aware matching
-- Partner requests, earnings, ratings and help
-- Road-routing where available
+## Partner/Admin
+- O-Ride, O-Drive and O-Movers partner entry and dashboards remain available.
+- Partner statuses: orange available, green assigned/approaching, blue on trip.
+- Nearest available partner matching remains atomic.
+- Admin Control Room retains service views, live map, inbox, complaints, ratings, partners, people/devices, simulation and system errors.
+- Admin access path remains `/promise212324` using Render `USER_NAME` and `PASSWORD`.
 
-## Admin
-Access only at `/promise212324` using `USER_NAME` and `PASSWORD` Render environment variables.
-
-Admin includes:
-- O-Ride service control
-- O-Drive service control
-- O-Movers service control
-- Live all-network map
-- People & devices
-- Inbox
-- Complaints
-- Partners
-- Simulation
-- System errors
-- Service request/customer views
-
-## Storage
-Uses `/var/data/o_system_v1.db` when writable, otherwise local `instance/`. Render persistent disk is included in `render.yaml`.
+## Deployment
+Set the existing Render `USER_NAME` and `PASSWORD` environment variables. The QR target is generated from the current deployment origin. No Intex hostname is hard-coded.
