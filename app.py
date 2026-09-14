@@ -392,16 +392,16 @@ def login():
             session['uid']=u['id']; audit('login','user',u['id'],actor_id=u['id']); nxt=request.form.get('next') or request.args.get('next') or ''
             if nxt.startswith('/') and not nxt.startswith('//') and nxt != '/admin': return redirect(nxt)
             return redirect(url_for('dashboard'))
-        nxt=request.form.get('next') or request.args.get('next',''); prov=bool(request.args.get('provider')) or any(x in nxt for x in ('/O-Rider','/O-Drive','/O-Movers')); pname='O Partner'
-        if '/O-Rider' in nxt: pname='O-Ride'
-        elif '/O-Drive' in nxt: pname='O-Drive'
+        nxt=request.form.get('next') or request.args.get('next',''); prov=bool(request.args.get('provider')) or any(x in nxt for x in ('/O-Rider','/O-Ride','/O-Drive','/O-drive','/O-Movers')); pname='O Partner'
+        if '/O-Rider' in nxt or '/O-Ride' in nxt: pname='O-Ride'
+        elif '/O-Drive' in nxt or '/O-drive' in nxt: pname='O-Drive'
         elif '/O-Movers' in nxt: pname='O-Movers'
         return render_template('login.html',error='Invalid credentials or inactive account.',next=nxt,provider=prov,provider_name=pname)
     nxt=request.args.get('next','')
-    prov=bool(request.args.get('provider')) or ('/O-Rider' in nxt or '/O-Drive' in nxt or '/O-Movers' in nxt)
+    prov=bool(request.args.get('provider')) or any(x in nxt for x in ('/O-Rider','/O-Ride','/O-Drive','/O-drive','/O-Movers'))
     provider_name='O Partner'
-    if '/O-Rider' in nxt: provider_name='O-Ride'
-    elif '/O-Drive' in nxt: provider_name='O-Drive'
+    if '/O-Rider' in nxt or '/O-Ride' in nxt: provider_name='O-Ride'
+    elif '/O-Drive' in nxt or '/O-drive' in nxt: provider_name='O-Drive'
     elif '/O-Movers' in nxt: provider_name='O-Movers'
     return render_template('login.html',error=None,next=nxt,provider=prov,provider_name=provider_name)
 @app.route('/logout')
@@ -521,10 +521,12 @@ def driver_dashboard_view(d):
     return render_template('driver_dashboard.html',user=u,driver=d,jobs=jobs,provider_path=PROVIDER_PATHS[d['service']],service_name=SERVICES[d['service']],pending=pending,completed=completed,earnings=earnings)
 
 @app.route('/O-Rider')
+@app.route('/O-Ride')
 def provider_ride():
     return provider_entry('bike')
 
 @app.route('/O-Drive')
+@app.route('/O-drive')
 def provider_drive():
     return provider_entry('ride')
 
