@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS partners(
  status TEXT NOT NULL DEFAULT 'offline',
  lat REAL, lon REAL,
  speed_kmh REAL NOT NULL DEFAULT 0,
+ item_count INTEGER NOT NULL DEFAULT 0,
+ helper_count INTEGER NOT NULL DEFAULT 0,
  last_seen TEXT,
  FOREIGN KEY(account_id) REFERENCES accounts(id)
 );
@@ -65,6 +67,8 @@ CREATE TABLE IF NOT EXISTS requests(
  partner_id INTEGER,
  created_at TEXT NOT NULL,
  updated_at TEXT NOT NULL,
+ item_count INTEGER NOT NULL DEFAULT 0,
+ helper_count INTEGER NOT NULL DEFAULT 0,
  FOREIGN KEY(customer_id) REFERENCES accounts(id),
  FOREIGN KEY(partner_id) REFERENCES partners(id)
 );
@@ -130,6 +134,15 @@ def db():
         pcols = {r['name'] for r in g.db.execute('PRAGMA table_info(partners)').fetchall()}
         if 'speed_kmh' not in pcols:
             g.db.execute("ALTER TABLE partners ADD COLUMN speed_kmh REAL NOT NULL DEFAULT 0")
+        if 'item_count' not in pcols:
+            g.db.execute("ALTER TABLE partners ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0")
+        if 'helper_count' not in pcols:
+            g.db.execute("ALTER TABLE partners ADD COLUMN helper_count INTEGER NOT NULL DEFAULT 0")
+        rcols = {r['name'] for r in g.db.execute('PRAGMA table_info(requests)').fetchall()}
+        if 'item_count' not in rcols:
+            g.db.execute("ALTER TABLE requests ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0")
+        if 'helper_count' not in rcols:
+            g.db.execute("ALTER TABLE requests ADD COLUMN helper_count INTEGER NOT NULL DEFAULT 0")
     return g.db
 
 
@@ -164,13 +177,22 @@ def nav(role='customer', service=None):
           <a class="navsub" href="/promise212324/service/drive">O-Drive</a>
           <a class="navsub" href="/promise212324/service/mover">O-Movers</a>
         </details>
-        <details class="navgroup"><summary>Control</summary>
+        <details class="navgroup"><summary>Operations</summary>
+          <a class="navsub" href="/promise212324/requests">All requests</a>
           <a class="navsub" href="/promise212324/inbox">Inbox</a>
           <a class="navsub" href="/promise212324/complaints">Complaints</a>
           <a class="navsub" href="/promise212324/ratings">Ratings</a>
+        </details>
+        <details class="navgroup"><summary>People & access</summary>
           <a class="navsub" href="/promise212324/partners">Partners</a>
           <a class="navsub" href="/promise212324/people">People & devices</a>
+          <a class="navsub" href="/promise212324/customers">Customers</a>
+        </details>
+        <details class="navgroup"><summary>System</summary>
           <a class="navsub" href="/promise212324/simulate">Simulation</a>
+          <a class="navsub" href="/promise212324/fare-controls">Fare controls</a>
+          <a class="navsub" href="/promise212324/backup">Backup</a>
+          <a class="navsub" href="/promise212324/export">Export</a>
           <a class="navsub" href="/promise212324/system">System errors</a>
         </details>
         <a class="navbtn" href="/promise212324/logout">Sign out</a></nav>'''
@@ -246,6 +268,8 @@ def admin_required(fn):
 def before():
     db()
     db().execute("INSERT OR IGNORE INTO settings(key,value) VALUES('simulate','0')")
+    defaults={'ride_base':'55','ride_km':'18','ride_min':'60','drive_base':'110','drive_km':'42','drive_min':'150','mover_base':'600','mover_km':'60','mover_min':'700','mover_item':'100','mover_helper':'650','commission':'10'}
+    for k,v in defaults.items(): db().execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(k,v))
 
 
 @app.get('/health')
@@ -461,7 +485,9 @@ def partner_request():
     a=actor(); p=q('SELECT * FROM partners WHERE account_id=?',(a['id'],),True); data=request.get_json() or {}; rid=int(data.get('request_id')); act=data.get('action')
     r=q('SELECT * FROM requests WHERE id=? AND service=?',(rid,p['service']),True)
     if not r: return jsonify(ok=False,error='Request not found'),404
-    if act=='accept' and r['status']=='requested':
+    if act=='decline' and r['status'] in ('requested','assigned') and (r['partner_id'] in (None,p['id'])):
+        if r['partner_id']==p['id']: db().execute("UPDATE requests SET partner_id=NULL,status='requested',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange' WHERE id=?",(p['id'],))
+    elif act=='accept' and r['status']=='requested':
         db().execute("UPDATE requests SET partner_id=?,status='assigned',updated_at=? WHERE id=? AND partner_id IS NULL AND status='requested'",(p['id'],now(),rid))
         if db().execute('SELECT changes()').fetchone()[0]: db().execute("UPDATE partners SET status='green' WHERE id=?",(p['id'],))
     elif act=='start' and r['partner_id']==p['id']:
@@ -470,6 +496,14 @@ def partner_request():
         db().execute("UPDATE requests SET status='completed',updated_at=? WHERE id=?",(now(),rid)); db().execute("UPDATE partners SET status='orange',completed=completed+1,earnings=earnings+COALESCE(?,0) WHERE id=?",(r['fare'],p['id']))
     return jsonify(ok=True)
 
+
+@app.get('/api/partner/dashboard')
+@login_required('partner')
+def partner_dashboard_api():
+    a=actor(); p=q('SELECT p.*,a.name,a.phone,a.username FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.account_id=?',(a['id'],),True)
+    if not p: return jsonify(ok=False),404
+    rows=q("SELECT r.id,r.customer_id,r.guest_name,r.pickup_name,r.destination_name,r.fare,r.payment,r.status,r.created_at,COALESCE(a.name,r.guest_name,'Guest') customer_name,COALESCE(a.phone,'') customer_phone FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY r.id DESC LIMIT 50",(p['service'],p['id']))
+    return jsonify(ok=True,partner=dict(p),requests=[dict(r) for r in rows])
 
 @app.get('/partner/requests')
 @login_required('partner')
@@ -516,6 +550,8 @@ def nearby_partners():
 def request_status(rid):
     r=q('SELECT r.*,p.lat partner_lat,p.lon partner_lon,p.status partner_status,p.speed_kmh partner_speed,p.rating partner_rating,p.vehicle partner_vehicle,p.plate partner_plate,a.name partner_name,a.phone partner_phone FROM requests r LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts a ON a.id=p.account_id WHERE r.id=?',(rid,),True)
     if not r: return jsonify(ok=False),404
+    a=actor()
+    if not session.get('admin') and (not a or (a['role']=='customer' and r['customer_id']!=a['id']) or (a['role']=='partner' and r['service']!=a['service'])): return jsonify(ok=False),403
     return jsonify(dict(r))
 
 
@@ -585,12 +621,18 @@ def create_request():
     pickup=data.get('pickup') or {}; dest=data.get('destination') or {}; a=actor(); guest=data.get('guest_name','').strip()
     if not all(v is not None for v in (pickup.get('lat'),pickup.get('lon'),dest.get('lat'),dest.get('lon'))): return jsonify(ok=False,error='Choose pickup and destination on the map'),400
     dist=float(data.get('distance_km') or 0)
-    rates={'ride':(55,18,60),'drive':(110,42,150),'mover':(600,60,700)}; base,pkm,mn=rates[service]; fare=round(max(mn,base+dist*pkm)/10)*10
+    rates={
+        'ride':(float(q("SELECT value FROM settings WHERE key='ride_base'",one=True)['value']),float(q("SELECT value FROM settings WHERE key='ride_km'",one=True)['value']),float(q("SELECT value FROM settings WHERE key='ride_min'",one=True)['value'])),
+        'drive':(float(q("SELECT value FROM settings WHERE key='drive_base'",one=True)['value']),float(q("SELECT value FROM settings WHERE key='drive_km'",one=True)['value']),float(q("SELECT value FROM settings WHERE key='drive_min'",one=True)['value'])),
+        'mover':(float(q("SELECT value FROM settings WHERE key='mover_base'",one=True)['value']),float(q("SELECT value FROM settings WHERE key='mover_km'",one=True)['value']),float(q("SELECT value FROM settings WHERE key='mover_min'",one=True)['value']))
+    }; base,pkm,mn=rates[service]; fare=max(mn,base+dist*pkm)
+    if service=='mover': fare += int(data.get('item_count') or 0)*float(q("SELECT value FROM settings WHERE key='mover_item'",one=True)['value']) + int(data.get('helper_count') or 0)*float(q("SELECT value FROM settings WHERE key='mover_helper'",one=True)['value'])
+    fare=round(fare/10)*10
     conn=db(); rid=None; best=None
     try:
         conn.execute('BEGIN IMMEDIATE')
         t=now()
-        cur=conn.execute('INSERT INTO requests(customer_id,guest_name,service,pickup_name,destination_name,pickup_lat,pickup_lon,dest_lat,dest_lon,fare,payment,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(a['id'] if a else None,guest,service,pickup.get('name','Pickup'),dest.get('name','Destination'),pickup['lat'],pickup['lon'],dest['lat'],dest['lon'],fare,data.get('payment','Cash'),'requested',t,t))
+        cur=conn.execute('INSERT INTO requests(customer_id,guest_name,service,pickup_name,destination_name,pickup_lat,pickup_lon,dest_lat,dest_lon,fare,payment,status,created_at,updated_at,item_count,helper_count) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(a['id'] if a else None,guest,service,pickup.get('name','Pickup'),dest.get('name','Destination'),pickup['lat'],pickup['lon'],dest['lat'],dest['lon'],fare,data.get('payment','Cash'),'requested',t,t,int(data.get('item_count') or 0),int(data.get('helper_count') or 0)))
         rid=cur.lastrowid
         scored=partner_candidates(conn,service,float(pickup['lat']),float(pickup['lon']))
         if scored:
@@ -606,6 +648,15 @@ def create_request():
         return jsonify(ok=False,error='Unable to create request'),500
     return jsonify(ok=True,id=rid,fare=fare,assigned=best['name'] if best else None,status='assigned' if best else 'requested')
 
+
+@app.post('/api/request/<int:rid>/cancel')
+def cancel_request(rid):
+    a=actor(); r=q('SELECT * FROM requests WHERE id=?',(rid,),True)
+    if not r or (a and r['customer_id']!=a['id']): return jsonify(ok=False,error='Trip not found'),404
+    if r['status'] not in ('requested','assigned'): return jsonify(ok=False,error='Trip can no longer be cancelled'),400
+    db().execute("UPDATE requests SET status='cancelled',updated_at=? WHERE id=?",(now(),rid))
+    if r['partner_id']: db().execute("UPDATE partners SET status='orange' WHERE id=?",(r['partner_id'],))
+    return jsonify(ok=True)
 
 @app.post('/api/pwa/install')
 def pwa_install():
@@ -639,6 +690,9 @@ def admin_login():
             'complaints':count("SELECT count(*) c FROM feedback WHERE kind='complaint' AND status='open'"),
             'errors':count("SELECT count(*) c FROM system_errors WHERE status='open'"),
             'ratings':count("SELECT count(*) c FROM ratings"),
+            'installs':count("SELECT count(*) c FROM pwa_installs") if q("SELECT name FROM sqlite_master WHERE type='table' AND name='pwa_installs'",one=True) else 0,
+            'completed_requests':count("SELECT count(*) c FROM requests WHERE status='completed'"),
+            'gross_fares':q("SELECT COALESCE(SUM(fare),0) total FROM requests WHERE status='completed'",one=True)['total'],
             'simulate':q("SELECT value FROM settings WHERE key='simulate'",one=True)['value']=='1',
         }
         return render_template('admin.html',sidebar=nav('admin'),stats=stats,page_theme='light')
@@ -673,6 +727,16 @@ def admin_partners():
             aid=cur.lastrowid; db().execute("INSERT INTO partners(account_id,service,vehicle,plate,licence,status) VALUES(?,?,?,?,?,'orange')",(aid,service,request.form.get('vehicle',''),request.form.get('plate',''),request.form.get('licence','')))
     partners=q('SELECT p.*,a.name,a.username,a.active,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id ORDER BY p.service,a.name')
     return render_template('admin_partners.html',sidebar=nav('admin'),partners=partners,page_theme='light')
+
+@app.post(ADMIN_PATH+'/partner/<int:pid>/status')
+@admin_required
+def admin_partner_status(pid):
+    p=q('SELECT * FROM partners WHERE id=?',(pid,),True)
+    if not p: abort(404)
+    status=request.form.get('status','offline')
+    if status not in ('offline','orange','green','blue'): status='offline'
+    db().execute('UPDATE partners SET status=? WHERE id=?',(status,pid))
+    return redirect(request.referrer or url_for('admin_partners'))
 
 @app.post(ADMIN_PATH+'/partner/<int:pid>/toggle')
 @admin_required
@@ -719,6 +783,51 @@ def simulate(): return render_template('simulate.html',sidebar=nav('admin'),enab
 def sim_toggle():
     val='1' if q("SELECT value FROM settings WHERE key='simulate'",one=True)['value']!='1' else '0'; db().execute("UPDATE settings SET value=? WHERE key='simulate'",(val,)); return redirect(url_for('simulate'))
 
+@app.get(ADMIN_PATH+'/requests')
+@admin_required
+def admin_requests():
+    rows=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Guest') customer_name,p.id partner_id,pa.name partner_name FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts pa ON pa.id=p.account_id ORDER BY r.id DESC LIMIT 250")
+    return render_template('admin_requests.html',sidebar=nav('admin'),rows=rows,page_theme='light')
+
+@app.get(ADMIN_PATH+'/customers')
+@admin_required
+def admin_customers():
+    rows=q("SELECT a.id,a.name,a.username,a.phone,a.created_at,a.active,(SELECT count(*) FROM requests r WHERE r.customer_id=a.id) trips FROM accounts a WHERE a.role='customer' ORDER BY a.id DESC LIMIT 250")
+    return render_template('admin_customers.html',sidebar=nav('admin'),rows=rows,page_theme='light')
+
+@app.route(ADMIN_PATH+'/fare-controls',methods=['GET','POST'])
+@admin_required
+def admin_fares():
+    if request.method=='POST':
+        fields=['ride_base','ride_km','ride_min','drive_base','drive_km','drive_min','mover_base','mover_km','mover_min','mover_item','mover_helper','commission']
+        for k in fields:
+            v=request.form.get(k)
+            if v not in (None,''):
+                try: float(v); db().execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,v))
+                except ValueError: pass
+        return redirect(url_for('admin_fares'))
+    vals={k:q('SELECT value FROM settings WHERE key=?',(k,),True)['value'] for k in ['ride_base','ride_km','ride_min','drive_base','drive_km','drive_min','mover_base','mover_km','mover_min','mover_item','mover_helper','commission']}
+    return render_template('admin_fares.html',sidebar=nav('admin'),vals=vals,page_theme='light')
+
+@app.get(ADMIN_PATH+'/backup')
+@admin_required
+def admin_backup():
+    # Safe logical backup without exposing the SQLite file directly.
+    data={}
+    for table in ['accounts','partners','requests','ratings','feedback','events','settings','system_errors']:
+        data[table]=[dict(r) for r in q(f'SELECT * FROM {table}')]
+    payload=json.dumps({'created_at':now(),'data':data},default=str,indent=2)
+    return app.response_class(payload,mimetype='application/json',headers={'Content-Disposition':'attachment; filename=O-System-backup.json'})
+
+@app.get(ADMIN_PATH+'/export')
+@admin_required
+def admin_export():
+    data={}
+    for table in ['accounts','partners','requests','ratings','feedback','events','settings','system_errors']:
+        data[table]=[dict(r) for r in q(f'SELECT * FROM {table}')]
+    payload=json.dumps(data,default=str,indent=2)
+    return app.response_class(payload,mimetype='application/json',headers={'Content-Disposition':'attachment; filename=O-System-export.json'})
+
 @app.get(ADMIN_PATH+'/system')
 @admin_required
 def admin_system():
@@ -729,6 +838,11 @@ def admin_system():
 @admin_required
 def resolve_error(eid): db().execute("UPDATE system_errors SET status='resolved' WHERE id=?",(eid,)); return redirect(url_for('admin_system'))
 
+
+@app.errorhandler(500)
+def server_error(e):
+    add_error('server',request.path,500,request.method,'Unhandled server error')
+    return render_template('error.html',sidebar=nav(),code=500,message='Something went wrong. The issue has been recorded for admin.',page_theme='light'),500
 
 @app.errorhandler(404)
 def not_found(e):
