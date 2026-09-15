@@ -1,8 +1,22 @@
-{% extends 'base.html' %}{% block title %}O — Move better{% endblock %}{% block body %}
+{% extends 'base.html' %}
+{% block title %}O — Kenya Ride, Driving & Moving Services{% endblock %}
+{% set meta_title = 'O — Kenya Ride, Driving & Moving Services' %}
+{% set meta_description = 'O is a Kenya-focused ride, driving and moving services platform. Find your location, choose a service, request help and install O as an app.' %}
+{% block structured_data %}
+<script type="application/ld+json">{{ {
+  '@context':'https://schema.org',
+  '@graph':[
+    {'@type':'Organization','@id':request.url_root.rstrip('/')+'/#organization','name':'O','alternateName':'O System','url':request.url_root.rstrip('/'),'logo':request.url_root.rstrip('/')+'/static/icons/o.svg'},
+    {'@type':'WebSite','@id':request.url_root.rstrip('/')+'/#website','url':request.url_root.rstrip('/'),'name':'O','alternateName':'O System','publisher':{'@id':request.url_root.rstrip('/')+'/#organization'}},
+    {'@type':'SoftwareApplication','name':'O','applicationCategory':'TravelApplication','operatingSystem':'Web, Android, iOS','description':meta_description,'url':request.url_root.rstrip('/'),'offers':{'@type':'Offer','price':'0','priceCurrency':'KES'}}
+  ]
+} | tojson }}</script>
+{% endblock %}
+{% block body %}
 <div id="intro" class="intro" aria-hidden="true"><div class="o-orbit"><div class="o-mark">O</div></div><div id="introWords" class="intro-words">Move with purpose.</div></div>
 <header class="topbar shell"><a class="brand" href="/" aria-label="O home"><span class="brand-o">O</span><span class="brand-name">SYSTEM</span></a><nav class="topnav"><a href="/app">Services</a><a href="/people">People</a><a href="{{ travel_url }}" target="_blank" rel="noopener">O Travel</a><button class="ghost" data-install>Install O</button></nav><button class="icon-btn" data-menu aria-label="Open menu">☰</button></header>
-<main class="hero shell"><section class="hero-copy"><div class="eyebrow">ONE SYSTEM. MANY WAYS TO MOVE.</div><h1>Move, send, drive.<br><span>Make it O.</span></h1><p class="lede">A Kenyan-built service platform for rides, driving, moving and the people behind them.</p><div class="hero-actions"><a class="btn primary" href="/app">Open O</a><a class="btn soft" href="/register">Create account</a></div><div class="mini-trust"><span>O-Ride</span><span>O-Drive</span><span>O-Movers</span><span>Cash · M-Pesa · Card</span></div></section><section class="hero-panel"><div class="map-preview" id="landingMap"></div><div class="panel-float"><div><b>Ready when you are.</b><span>Enable location and O finds you.</span></div><a class="btn dark" href="/app">Start</a></div></section></main>
-<section class="feature-strip shell"><div><strong>Fast to understand</strong><span>Service first. No wall of instructions.</span></div><div><strong>Built for phones</strong><span>Touch-friendly, installable and calm.</span></div><div><strong>Made to grow</strong><span>Customers, providers, operations and admin in one foundation.</span></div></section>
-<section class="qr-share shell"><div><div class="eyebrow">SHARE O</div><h2>Bring someone in.</h2><p>Your invitation QR always points to wherever this O system is actually hosted.</p><div class="row"><button class="btn primary" data-invite>Generate invite QR</button><button class="btn soft" data-share>Share O</button></div></div><div class="qr-card"><img id="inviteQr" alt="O invite QR" hidden><div id="qrPlaceholder">QR ready on request</div></div></section>
+<main class="hero shell"><section class="hero-copy"><div class="eyebrow">O · KENYA</div><h1>Ride. Drive. Move.<br><span>Make it O.</span></h1><p class="lede">A Kenya-focused transport and services platform for rides, driving, moving and the people behind them.</p><div class="hero-actions"><a class="btn primary" href="/app">Open O</a><a class="btn soft" href="/register">Create account</a></div><div class="mini-trust"><span>O-Ride</span><span>O-Drive</span><span>O-Movers</span><span>Cash · M-Pesa · Card</span></div></section><section class="hero-panel"><div class="map-preview" id="landingMap"></div><div class="panel-float"><div><b>Ready when you are.</b><span>Enable location and O finds you.</span></div><a class="btn dark" href="/app">Start</a></div></section></main>
+<section class="feature-strip shell"><div><strong>Ride in Kenya</strong><span>Location-aware service requests with live maps.</span></div><div><strong>Drive & move</strong><span>O-Drive and O-Movers for everyday service needs.</span></div><div><strong>Install O</strong><span>Use O from the browser or install it as an app.</span></div></section>
+<section class="qr-share shell"><div><div class="eyebrow">SHARE O</div><h2>Bring someone in.</h2><p>Your invitation QR always points to the O site wherever this system is hosted.</p><div class="row"><button class="btn primary" data-invite>Generate invite QR</button><button class="btn soft" data-share>Share O</button></div></div><div class="qr-card"><img id="inviteQr" alt="O invitation QR code" hidden><div id="qrPlaceholder">QR ready on request</div></div></section>
 <footer class="footer shell"><span>O — a Toror technology product.</span><div><a href="/app">Services</a><a href="/people">People</a><a href="/admin">Admin</a></div></footer>
 {% endblock %}{% block script %}<script>O.initLanding();</script>{% endblock %}

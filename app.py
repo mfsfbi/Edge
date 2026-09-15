@@ -12,6 +12,7 @@ ADMIN_USER = os.getenv('USER_NAME', 'admin')
 ADMIN_PASSWORD = os.getenv('PASSWORD', 'change-me')
 OSRM_URL = os.getenv('OSRM_URL', 'https://router.project-osrm.org')
 APP_NAME = 'O'
+APP_TAGLINE = 'Kenya ride, driving and moving services'
 TRAVEL_URL = 'https://otravel-bleg.onrender.com'
 
 app = Flask(__name__)
@@ -118,6 +119,14 @@ def init_db():
 init_db()
 
 
+@app.after_request
+def seo_headers(response):
+    # Keep public informational pages crawlable while preserving normal app/session behavior.
+    if request.path in ('/', '/app', '/people', '/login', '/register'):
+        response.headers.setdefault('X-Robots-Tag', 'index, follow')
+    return response
+
+
 def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
@@ -155,11 +164,11 @@ def health():
 
 @app.route('/')
 def index():
-    return render_template('index.html', travel_url=TRAVEL_URL, app_name=APP_NAME)
+    return render_template('index.html', travel_url=TRAVEL_URL, app_name=APP_NAME, app_tagline=APP_TAGLINE, canonical_url=request.url_root.rstrip('/'))
 
 @app.route('/app')
 def app_shell():
-    return render_template('app.html', travel_url=TRAVEL_URL, app_name=APP_NAME)
+    return render_template('app.html', travel_url=TRAVEL_URL, app_name=APP_NAME, app_tagline=APP_TAGLINE, canonical_url=request.url)
 
 @app.route('/login')
 def login_page():
@@ -183,6 +192,19 @@ def provider_page(role_slug):
     if not role:
         return render_template('error.html', code=404, message='That O role does not exist.'), 404
     return render_template('provider.html', role=role)
+
+@app.get('/robots.txt')
+def robots_txt():
+    base = request.url_root.rstrip('/')
+    body = f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /provider/\nSitemap: {base}/sitemap.xml\n"
+    return app.response_class(body, mimetype='text/plain')
+
+@app.get('/sitemap.xml')
+def sitemap_xml():
+    base = request.url_root.rstrip('/')
+    urls = [base + path for path in ('/', '/app', '/people', '/login', '/register')]
+    body = '<?xml version="1.0" encoding="UTF-8"?>' + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(f'<url><loc>{u}</loc></url>' for u in urls) + '</urlset>'
+    return app.response_class(body, mimetype='application/xml')
 
 @app.route('/sw.js')
 def service_worker():
