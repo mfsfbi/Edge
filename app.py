@@ -1,313 +1,478 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
-from werkzeug.security import generate_password_hash, check_password_hash
+import os, secrets, sqlite3, hashlib
+from datetime import datetime, timezone
 from functools import wraps
-from pathlib import Path
-import sqlite3, os, re
+from urllib.parse import urlparse
 
-BASE = Path(__file__).resolve().parent
+from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
-def choose_data_dir() -> Path:
-    # Prefer an explicitly configured persistent directory.
-    configured = os.environ.get('DATA_DIR', '').strip()
-    if configured:
-        candidate = Path(configured).expanduser()
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            test = candidate / '.write_test'
-            test.write_text('ok', encoding='utf-8')
-            test.unlink(missing_ok=True)
-            return candidate
-        except (PermissionError, OSError):
-            pass
-
-    # Render disks are normally mounted at /var/data, but a service deployed
-    # without a disk cannot write there. Fall back instead of crashing startup.
-    if os.environ.get('RENDER'):
-        candidate = Path('/var/data')
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            test = candidate / '.write_test'
-            test.write_text('ok', encoding='utf-8')
-            test.unlink(missing_ok=True)
-            return candidate
-        except (PermissionError, OSError):
-            pass
-
-    candidate = BASE / 'data'
-    candidate.mkdir(parents=True, exist_ok=True)
-    return candidate
-
-DATA = choose_data_dir()
-DB_PATH = DATA / 'o.db'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.getenv('O_DB_PATH', os.path.join(BASE_DIR, 'data', 'o.db'))
+ADMIN_USER = os.getenv('USER_NAME', 'admin')
+ADMIN_PASSWORD = os.getenv('PASSWORD', 'change-me')
+OSRM_URL = os.getenv('OSRM_URL', 'https://router.project-osrm.org')
+APP_NAME = 'O'
+TRAVEL_URL = 'https://otravel-bleg.onrender.com'
 
 app = Flask(__name__)
-app.config.update(
-    SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-only-change-this-secret'),
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')),
-)
+app.secret_key = os.getenv('SECRET_KEY') or hashlib.sha256(f'{ADMIN_USER}|{ADMIN_PASSWORD}|O-SYSTEM'.encode()).hexdigest()
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE','0')=='1')
 
-PEOPLE_ROLES = ('Rider', 'Driver', 'Mover')
-ROLE_DASHBOARDS = {'Rider': 'rider_dashboard', 'Driver': 'driver_dashboard', 'Mover': 'mover_dashboard'}
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 
 def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if 'db' not in g:
+        g.db = sqlite3.connect(DB_PATH)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute('PRAGMA foreign_keys = ON')
+    return g.db
 
+@app.teardown_appcontext
+def close_db(exc=None):
+    conn = g.pop('db', None)
+    if conn:
+        conn.close()
 
 def init_db():
-    with db() as c:
-        c.executescript('''
-        CREATE TABLE IF NOT EXISTS people (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL COLLATE NOCASE,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('Rider','Driver','Mover')),
-            phone TEXT DEFAULT '',
-            id_number TEXT DEFAULT '',
-            active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(full_name, role)
-        );
-        CREATE TABLE IF NOT EXISTS requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_id INTEGER,
-            service TEXT NOT NULL,
-            destination TEXT DEFAULT '',
-            pickup TEXT DEFAULT '',
-            payment_method TEXT DEFAULT 'Cash',
-            request_name TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'new',
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(person_id) REFERENCES people(id) ON DELETE SET NULL
-        );
-        ''')
-        c.commit()
+    con = sqlite3.connect(DB_PATH)
+    con.executescript('''
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      identifier TEXT UNIQUE NOT NULL,
+      phone TEXT,
+      password_hash TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS providers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      identifier TEXT UNIQUE NOT NULL,
+      phone TEXT,
+      ref_code TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('Rider','Driver','Mover')),
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      service TEXT NOT NULL,
+      pickup_lat REAL NOT NULL,
+      pickup_lng REAL NOT NULL,
+      destination_lat REAL NOT NULL,
+      destination_lng REAL NOT NULL,
+      pickup_label TEXT,
+      destination_label TEXT,
+      payment_method TEXT,
+      fare REAL,
+      distance_km REAL,
+      duration_min REAL,
+      status TEXT NOT NULL DEFAULT 'New',
+      provider_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id),
+      FOREIGN KEY(provider_id) REFERENCES providers(id)
+    );
+    CREATE TABLE IF NOT EXISTS ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+      comment TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS complaints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      name TEXT,
+      contact TEXT,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Open',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS invite_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT UNIQUE NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor_type TEXT,
+      actor_id INTEGER,
+      action TEXT NOT NULL,
+      details TEXT,
+      created_at TEXT NOT NULL
+    );
+    ''')
+    con.commit(); con.close()
+
+init_db()
 
 
-def admin_ok():
-    return session.get('admin_ok') is True
+def now_iso():
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
-
-def person():
-    pid = session.get('person_id')
-    if not pid:
-        return None
-    with db() as c:
-        return c.execute('SELECT * FROM people WHERE id=? AND active=1', (pid,)).fetchone()
-
+def audit(actor_type, actor_id, action, details=''):
+    db().execute('INSERT INTO audit_log(actor_type,actor_id,action,details,created_at) VALUES (?,?,?,?,?)', (actor_type,actor_id,action,details,now_iso()))
+    db().commit()
 
 def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if not admin_ok():
-            return redirect(url_for('admin_login', next=request.path))
+        if not session.get('admin'):
+            return jsonify(error='Admin authentication required'), 401
         return fn(*args, **kwargs)
     return wrapper
 
-
-def person_required(fn):
+def user_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if not person():
-            return redirect(url_for('people_login', role=request.args.get('role', '')))
+        if not session.get('user_id'):
+            return jsonify(error='Account required'), 401
         return fn(*args, **kwargs)
     return wrapper
 
+def provider_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get('provider_id'):
+            return jsonify(error='Provider authentication required'), 401
+        return fn(*args, **kwargs)
+    return wrapper
 
-def clean(s, limit=255):
-    return re.sub(r'\s+', ' ', (s or '').strip())[:limit]
-
-
-@app.route('/health')
+@app.get('/api/health')
 def health():
-    return {'ok': True, 'app': 'O', 'version': 'people-v1'}
-
+    return jsonify(ok=True, service='O', time=now_iso())
 
 @app.route('/')
-def home():
-    return render_template('home.html')
+def index():
+    return render_template('index.html', travel_url=TRAVEL_URL, app_name=APP_NAME)
 
+@app.route('/app')
+def app_shell():
+    return render_template('app.html', travel_url=TRAVEL_URL, app_name=APP_NAME)
 
-@app.route('/services')
-def services():
-    return render_template('services.html')
+@app.route('/login')
+def login_page():
+    return render_template('auth.html', mode='login')
 
+@app.route('/register')
+def register_page():
+    return render_template('auth.html', mode='register')
 
-@app.route('/people', methods=['GET'])
-def people():
-    return render_template('people.html', roles=PEOPLE_ROLES)
+@app.route('/people')
+def people_page():
+    return render_template('people.html')
 
+@app.route('/admin')
+def admin_page():
+    return render_template('admin.html')
 
-@app.route('/people/<role>', methods=['GET'])
-def people_role(role):
-    if role not in PEOPLE_ROLES:
-        abort(404)
-    return redirect(url_for('people_login', role=role))
+@app.route('/provider/<role_slug>')
+def provider_page(role_slug):
+    role = {'rider':'Rider','driver':'Driver','mover':'Mover'}.get(role_slug.lower())
+    if not role:
+        return render_template('error.html', code=404, message='That O role does not exist.'), 404
+    return render_template('provider.html', role=role)
 
+@app.route('/sw.js')
+def service_worker():
+    response = app.send_static_file('sw.js')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.mimetype = 'application/javascript'
+    return response
 
-@app.route('/people/login', methods=['GET', 'POST'])
-def people_login():
-    role = clean(request.args.get('role') or request.form.get('role'))
-    if role not in PEOPLE_ROLES:
-        role = ''
-    if request.method == 'POST':
-        identity = clean(request.form.get('identity'), 255)
-        password = request.form.get('password', '')
-        selected = clean(request.form.get('role'), 30)
-        if selected not in PEOPLE_ROLES or not identity or not password:
-            flash('Choose your O role and enter the name and password used for your account.', 'error')
-            return render_template('people_login.html', role=selected if selected in PEOPLE_ROLES else '')
-        with db() as c:
-            candidates = c.execute(
-                '''SELECT * FROM people WHERE active=1 AND role=? AND (full_name=? OR phone=? OR id_number=?) LIMIT 2''',
-                (selected, identity, identity, identity),
-            ).fetchall()
-        if len(candidates) == 1 and check_password_hash(candidates[0]['password_hash'], password):
-            session.clear()
-            session.permanent = True
-            session['person_id'] = candidates[0]['id']
-            return redirect(url_for(ROLE_DASHBOARDS[selected]))
-        flash('That name, phone/ID and password did not match an active O account.', 'error')
-    return render_template('people_login.html', role=role)
+@app.get('/manifest.json')
+def manifest_json():
+    return app.send_static_file('manifest.json')
 
+@app.post('/api/auth/register')
+def register():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    identifier = (data.get('identifier') or '').strip().lower()
+    phone = (data.get('phone') or '').strip()
+    password = data.get('password') or ''
+    if len(name) < 2 or len(identifier) < 3 or len(password) < 6:
+        return jsonify(error='Name, login identifier and a 6+ character password are required.'), 400
+    try:
+        cur = db().execute('INSERT INTO users(name,identifier,phone,password_hash,created_at) VALUES (?,?,?,?,?)', (name,identifier,phone,generate_password_hash(password),now_iso()))
+        db().commit()
+    except sqlite3.IntegrityError:
+        return jsonify(error='That identifier is already in O.'), 409
+    session.clear(); session['user_id'] = cur.lastrowid
+    audit('user', cur.lastrowid, 'register')
+    return jsonify(ok=True, redirect='/app')
 
-@app.route('/people/logout')
-def people_logout():
-    session.pop('person_id', None)
-    return redirect(url_for('people'))
+@app.post('/api/auth/login')
+def login():
+    data = request.get_json(silent=True) or {}
+    identifier = (data.get('identifier') or '').strip().lower()
+    password = data.get('password') or ''
+    row = db().execute('SELECT * FROM users WHERE identifier=? AND active=1', (identifier,)).fetchone()
+    if not row or not check_password_hash(row['password_hash'], password):
+        return jsonify(error='Invalid O account credentials.'), 401
+    session.clear(); session['user_id'] = row['id']
+    db().execute('UPDATE users SET last_seen_at=? WHERE id=?',(now_iso(),row['id'])); db().commit()
+    audit('user', row['id'], 'login')
+    return jsonify(ok=True, redirect='/app')
 
+@app.post('/api/auth/logout')
+def logout():
+    session.clear(); return jsonify(ok=True)
 
-@app.route('/rider-dashboard')
-@person_required
-def rider_dashboard():
-    p = person()
-    if p['role'] != 'Rider': abort(403)
-    return render_template('dashboard.html', person=p, title='Rider dashboard', accent='rider', body='Request a ride, check your current trip and keep moving with O.')
+@app.get('/api/me')
+def me():
+    if session.get('admin'):
+        return jsonify(type='admin', user={'identifier': ADMIN_USER})
+    if session.get('provider_id'):
+        p = db().execute('SELECT id,name,identifier,phone,role,active,ref_code FROM providers WHERE id=?',(session['provider_id'],)).fetchone()
+        return jsonify(type='provider', user=dict(p) if p else None)
+    if session.get('user_id'):
+        u = db().execute('SELECT id,name,identifier,phone,active FROM users WHERE id=?',(session['user_id'],)).fetchone()
+        return jsonify(type='user', user=dict(u) if u else None)
+    return jsonify(type='guest')
 
+@app.post('/api/people/login')
+def provider_login():
+    data = request.get_json(silent=True) or {}
+    role = data.get('role')
+    identifier = (data.get('identifier') or '').strip().lower()
+    password = data.get('password') or ''
+    if role not in ('Rider','Driver','Mover'):
+        return jsonify(error='Choose a valid O role.'), 400
+    p = db().execute('SELECT * FROM providers WHERE identifier=? AND role=? AND active=1',(identifier,role)).fetchone()
+    if not p or not check_password_hash(p['password_hash'], password):
+        return jsonify(error='Invalid provider credentials for that role.'), 401
+    session.clear(); session['provider_id'] = p['id']; session['provider_role'] = role
+    db().execute('UPDATE providers SET last_seen_at=? WHERE id=?',(now_iso(),p['id'])); db().commit()
+    audit('provider',p['id'],'login',role)
+    return jsonify(ok=True, redirect=f"/provider/{role.lower()}")
 
-@app.route('/driver-dashboard')
-@person_required
-def driver_dashboard():
-    p = person()
-    if p['role'] != 'Driver': abort(403)
-    return render_template('dashboard.html', person=p, title='Driver dashboard', accent='driver', body='Manage your O-Drive work, active requests and trips from one place.')
+@app.post('/api/complaints')
+def complaint():
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()
+    if len(message) < 3: return jsonify(error='Please describe the complaint.'), 400
+    uid = session.get('user_id')
+    name = (data.get('name') or '').strip()
+    contact = (data.get('contact') or '').strip()
+    if uid:
+        u=db().execute('SELECT name,phone,identifier FROM users WHERE id=?',(uid,)).fetchone()
+        name=name or (u['name'] if u else '')
+        contact=contact or ((u['phone'] or u['identifier']) if u else '')
+    db().execute('INSERT INTO complaints(user_id,name,contact,message,created_at) VALUES(?,?,?,?,?)',(uid,name,contact,message,now_iso()))
+    db().commit(); audit('user',uid,'complaint',message[:160])
+    return jsonify(ok=True,message='Complaint received.')
 
+@app.post('/api/ratings')
+@user_required
+def rating():
+    data=request.get_json(silent=True) or {}
+    try: value=int(data.get('rating'))
+    except (TypeError,ValueError): value=0
+    if value not in range(1,6): return jsonify(error='Rating must be 1–5.'),400
+    comment=(data.get('comment') or '').strip()[:1000]
+    uid=session['user_id']
+    db().execute('INSERT INTO ratings(user_id,rating,comment,created_at) VALUES(?,?,?,?)',(uid,value,comment,now_iso())); db().commit()
+    return jsonify(ok=True)
 
-@app.route('/mover-dashboard')
-@person_required
-def mover_dashboard():
-    p = person()
-    if p['role'] != 'Mover': abort(403)
-    return render_template('dashboard.html', person=p, title='Mover dashboard', accent='mover', body='Manage O-Movers requests and delivery work from one place.')
+@app.get('/api/invite')
+def invite():
+    token=secrets.token_urlsafe(18)
+    db().execute('INSERT INTO invite_tokens(token,created_at) VALUES(?,?)',(token,now_iso())); db().commit()
+    # No hardcoded host: frontend uses window.location.origin + token.
+    return jsonify(token=token)
 
+@app.post('/api/route')
+def route_api():
+    data=request.get_json(silent=True) or {}
+    try:
+        a=(float(data['from']['lng']),float(data['from']['lat'])); b=(float(data['to']['lng']),float(data['to']['lat']))
+    except Exception:
+        return jsonify(error='Valid coordinates required.'),400
+    # The browser can call this with the public OSRM service; server proxy avoids CORS issues if configured.
+    import urllib.request, json
+    coords=f'{a[0]},{a[1]};{b[0]},{b[1]}'
+    url=f'{OSRM_URL.rstrip("/")}/route/v1/driving/{coords}?overview=full&geometries=geojson'
+    try:
+        with urllib.request.urlopen(url, timeout=12) as r:
+            payload=json.loads(r.read().decode('utf-8'))
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify(error='Routing service unavailable.', detail=str(e)[:120]),502
 
-@app.route('/request', methods=['POST'])
-def request_service():
-    service = clean(request.form.get('service'), 30)
-    destination = clean(request.form.get('destination'), 500)
-    pickup = clean(request.form.get('pickup'), 500)
-    payment_method = clean(request.form.get('payment_method'), 30) or 'Cash'
-    request_name = clean(request.form.get('request_name'), 120)
-    if service not in ('O-Ride', 'O-Drive', 'O-Movers'):
-        flash('Choose an O service first.', 'error')
-        return redirect(url_for('home'))
-    p = person()
-    with db() as c:
-        c.execute('INSERT INTO requests(person_id,service,destination,pickup,payment_method,request_name) VALUES(?,?,?,?,?,?)',
-                  (p['id'] if p else None, service, destination, pickup, payment_method, request_name))
-        c.commit()
-    flash('Your request was received.', 'success')
-    return redirect(url_for('home'))
+@app.post('/api/requests')
+def create_request():
+    data=request.get_json(silent=True) or {}
+    service=data.get('service')
+    payment=data.get('payment_method') or 'Cash'
+    if service not in ('O-Ride','O-Drive','O-Movers'):
+        return jsonify(error='Choose a valid O service.'),400
+    try:
+        pl=data['pickup']; de=data['destination']
+        plat,plng=float(pl['lat']),float(pl['lng']); dlat,dlng=float(de['lat']),float(de['lng'])
+    except Exception: return jsonify(error='Pickup and destination coordinates are required.'),400
+    fare=data.get('fare'); dist=data.get('distance_km'); dur=data.get('duration_min')
+    stamp=now_iso()
+    cur=db().execute('''INSERT INTO requests(user_id,service,pickup_lat,pickup_lng,destination_lat,destination_lng,pickup_label,destination_label,payment_method,fare,distance_km,duration_min,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (session['user_id'],service,plat,plng,dlat,dlng,data.get('pickup_label','Current location'),data.get('destination_label','Selected destination'),payment,fare,dist,dur,'New',stamp,stamp))
+    db().commit(); audit('user',session.get('user_id'),'request',service)
+    return jsonify(ok=True, request_id=cur.lastrowid, status='New')
 
+@app.get('/api/my-requests')
+@user_required
+def my_requests():
+    rows=db().execute('SELECT r.*, p.name provider_name, p.role provider_role FROM requests r LEFT JOIN providers p ON p.id=r.provider_id WHERE r.user_id=? ORDER BY r.id DESC LIMIT 30',(session['user_id'],)).fetchall()
+    return jsonify(items=[dict(r) for r in rows])
 
-@app.route('/promise212324', methods=['GET', 'POST'])
+@app.post('/api/admin/login')
 def admin_login():
-    if admin_ok():
-        return redirect(url_for('admin_people'))
-    if request.method == 'POST':
-        username = clean(request.form.get('username'), 120)
-        password = request.form.get('password', '')
-        configured_user = os.environ.get('USER_NAME', 'admin')
-        configured_password = os.environ.get('PASSWORD', '')
-        if username == configured_user and configured_password and password == configured_password:
-            session.clear(); session['admin_ok'] = True; session.permanent = True
-            return redirect(request.args.get('next') or url_for('admin_people'))
-        flash('Invalid control-room credentials.', 'error')
-    return render_template('admin_login.html')
+    data=request.get_json(silent=True) or {}
+    if secrets.compare_digest(str(data.get('username','')), str(ADMIN_USER)) and secrets.compare_digest(str(data.get('password','')), str(ADMIN_PASSWORD)):
+        session.clear(); session['admin']=True; audit('admin',None,'login')
+        return jsonify(ok=True,redirect='/admin')
+    return jsonify(error='Invalid admin credentials.'),401
 
-
-@app.route('/promise212324/logout')
+@app.post('/api/admin/logout')
 def admin_logout():
-    session.pop('admin_ok', None)
-    return redirect(url_for('home'))
+    session.clear(); return jsonify(ok=True)
 
-
-@app.route('/promise212324/people', methods=['GET', 'POST'])
+@app.get('/api/admin/overview')
 @admin_required
-def admin_people():
-    if request.method == 'POST':
-        full_name = clean(request.form.get('full_name'))
-        password = request.form.get('password', '')
-        role = clean(request.form.get('role'), 30)
-        phone = clean(request.form.get('phone'), 50)
-        id_number = clean(request.form.get('id_number'), 80)
-        if not full_name or not password or role not in PEOPLE_ROLES:
-            flash('Name, password and one O role are required.', 'error')
-            return redirect(url_for('admin_people'))
-        with db() as c:
-            try:
-                c.execute('INSERT INTO people(full_name,password_hash,role,phone,id_number) VALUES(?,?,?,?,?)',
-                          (full_name, generate_password_hash(password), role, phone, id_number))
-                c.commit()
-            except sqlite3.IntegrityError:
-                flash('That name already exists for the selected O role.', 'error')
-                return redirect(url_for('admin_people'))
-        flash(f'{full_name} was added as {role}. They can now use the same name and password at /people.', 'success')
-        return redirect(url_for('admin_people'))
-    with db() as c:
-        people_rows = c.execute('SELECT id,full_name,role,phone,id_number,active,created_at FROM people ORDER BY role,full_name').fetchall()
-    return render_template('admin_people.html', people=people_rows)
+def admin_overview():
+    c=db()
+    return jsonify(stats={
+        'users':c.execute('SELECT COUNT(*) n FROM users').fetchone()['n'],
+        'providers':c.execute('SELECT COUNT(*) n FROM providers WHERE active=1').fetchone()['n'],
+        'requests':c.execute('SELECT COUNT(*) n FROM requests').fetchone()['n'],
+        'active_requests':c.execute("SELECT COUNT(*) n FROM requests WHERE status NOT IN ('Completed','Cancelled')").fetchone()['n'],
+        'complaints':c.execute("SELECT COUNT(*) n FROM complaints WHERE status='Open'").fetchone()['n'],
+        'ratings':c.execute('SELECT COUNT(*) n FROM ratings').fetchone()['n']})
 
-
-@app.post('/promise212324/people/<int:person_id>/toggle')
+@app.get('/api/admin/providers')
 @admin_required
-def admin_people_toggle(person_id):
-    with db() as c:
-        c.execute('UPDATE people SET active=CASE WHEN active=1 THEN 0 ELSE 1 END WHERE id=?', (person_id,)); c.commit()
-    return redirect(url_for('admin_people'))
+def admin_providers():
+    rows=db().execute('SELECT id,name,identifier,phone,ref_code,role,active,created_at,last_seen_at FROM providers ORDER BY role,name').fetchall()
+    return jsonify(items=[dict(r) for r in rows])
 
-
-@app.post('/promise212324/people/<int:person_id>/delete')
+@app.post('/api/admin/providers')
 @admin_required
-def admin_people_delete(person_id):
-    with db() as c:
-        c.execute('DELETE FROM people WHERE id=?', (person_id,)); c.commit()
-    return redirect(url_for('admin_people'))
+def admin_create_provider():
+    data=request.get_json(silent=True) or {}
+    name=(data.get('name') or '').strip(); identifier=(data.get('identifier') or '').strip().lower(); phone=(data.get('phone') or '').strip(); password=data.get('password') or ''; role=data.get('role')
+    if len(name)<2 or len(identifier)<3 or len(password)<6 or role not in ('Rider','Driver','Mover'):
+        return jsonify(error='Name, identifier, role and 6+ character password are required.'),400
+    ref='O-'+secrets.token_hex(5).upper()
+    try:
+        cur=db().execute('INSERT INTO providers(name,identifier,phone,ref_code,password_hash,role,created_at) VALUES(?,?,?,?,?,?,?)',(name,identifier,phone,ref,generate_password_hash(password),role,now_iso())); db().commit()
+    except sqlite3.IntegrityError: return jsonify(error='That provider identifier is already used.'),409
+    audit('admin',None,'create_provider',f'{role}:{identifier}')
+    return jsonify(ok=True,id=cur.lastrowid,ref_code=ref)
 
+@app.patch('/api/admin/providers/<int:pid>')
+@admin_required
+def admin_provider_update(pid):
+    data=request.get_json(silent=True) or {}; p=db().execute('SELECT * FROM providers WHERE id=?',(pid,)).fetchone()
+    if not p:return jsonify(error='Provider not found.'),404
+    fields=[]; vals=[]
+    for key in ('name','phone','role'):
+        if key in data:
+            if key=='role' and data[key] not in ('Rider','Driver','Mover'): return jsonify(error='Invalid role.'),400
+            fields.append(f'{key}=?'); vals.append(data[key])
+    if 'active' in data: fields.append('active=?'); vals.append(1 if data['active'] else 0)
+    if data.get('password'): fields.append('password_hash=?'); vals.append(generate_password_hash(data['password']))
+    if fields:
+        vals.append(pid); db().execute(f'UPDATE providers SET {", ".join(fields)} WHERE id=?',vals); db().commit()
+    audit('admin',None,'update_provider',str(pid)); return jsonify(ok=True)
 
-@app.route('/promise212324/requests')
+@app.get('/api/admin/users')
+@admin_required
+def admin_users():
+    rows=db().execute('SELECT id,name,identifier,phone,active,created_at,last_seen_at FROM users ORDER BY id DESC LIMIT 200').fetchall(); return jsonify(items=[dict(r) for r in rows])
+
+@app.patch('/api/admin/users/<int:uid>')
+@admin_required
+def admin_user_update(uid):
+    data=request.get_json(silent=True) or {}
+    user=db().execute('SELECT id FROM users WHERE id=?',(uid,)).fetchone()
+    if not user:return jsonify(error='User not found.'),404
+    fields=[]; vals=[]
+    if 'active' in data: fields.append('active=?'); vals.append(1 if data['active'] else 0)
+    if data.get('password'): fields.append('password_hash=?'); vals.append(generate_password_hash(data['password']))
+    if data.get('name'): fields.append('name=?'); vals.append(str(data['name']).strip())
+    if fields:
+        vals.append(uid);db().execute(f'UPDATE users SET {", ".join(fields)} WHERE id=?',vals);db().commit()
+    audit('admin',None,'update_user',str(uid));return jsonify(ok=True)
+
+@app.get('/api/admin/ratings')
+@admin_required
+def admin_ratings():
+    rows=db().execute('SELECT r.*,u.name,u.identifier FROM ratings r LEFT JOIN users u ON u.id=r.user_id ORDER BY r.id DESC LIMIT 200').fetchall();return jsonify(items=[dict(r) for r in rows])
+
+@app.get('/api/admin/audit')
+@admin_required
+def admin_audit():
+    rows=db().execute('SELECT * FROM audit_log ORDER BY id DESC LIMIT 300').fetchall();return jsonify(items=[dict(r) for r in rows])
+
+@app.get('/api/admin/requests')
 @admin_required
 def admin_requests():
-    with db() as c:
-        rows = c.execute('''SELECT r.*, p.full_name FROM requests r LEFT JOIN people p ON p.id=r.person_id ORDER BY r.id DESC LIMIT 100''').fetchall()
-    return render_template('admin_requests.html', requests=rows)
+    rows=db().execute('''SELECT r.*, u.name user_name, p.name provider_name, p.role provider_role FROM requests r LEFT JOIN users u ON u.id=r.user_id LEFT JOIN providers p ON p.id=r.provider_id ORDER BY r.id DESC LIMIT 200''').fetchall(); return jsonify(items=[dict(r) for r in rows])
 
+@app.patch('/api/admin/requests/<int:rid>')
+@admin_required
+def admin_request_update(rid):
+    data=request.get_json(silent=True) or {}; status=data.get('status'); provider_id=data.get('provider_id')
+    allowed={'New','Available','Coming to you','On trip','Completed','Cancelled'}
+    if status not in allowed:return jsonify(error='Invalid status.'),400
+    db().execute('UPDATE requests SET status=?, provider_id=?, updated_at=? WHERE id=?',(status,provider_id or None,now_iso(),rid));db().commit();audit('admin',None,'update_request',f'{rid}:{status}');return jsonify(ok=True)
 
-@app.errorhandler(403)
-def forbidden(_):
-    return render_template('error.html', code=403, message='You do not have access to this area.'), 403
+@app.get('/api/admin/complaints')
+@admin_required
+def admin_complaints():
+    rows=db().execute('SELECT * FROM complaints ORDER BY id DESC LIMIT 200').fetchall(); return jsonify(items=[dict(r) for r in rows])
 
+@app.patch('/api/admin/complaints/<int:cid>')
+@admin_required
+def admin_complaint_update(cid):
+    status=(request.get_json(silent=True) or {}).get('status')
+    if status not in ('Open','In review','Resolved'):return jsonify(error='Invalid status.'),400
+    db().execute('UPDATE complaints SET status=? WHERE id=?',(status,cid));db().commit();return jsonify(ok=True)
+
+@app.get('/api/provider/requests')
+@provider_required
+def provider_requests():
+    role=session['provider_role']; service='O-Ride' if role=='Rider' else ('O-Drive' if role=='Driver' else 'O-Movers')
+    rows=db().execute("SELECT r.*,u.name user_name FROM requests r LEFT JOIN users u ON u.id=r.user_id WHERE r.service=? AND r.status IN ('Available','Coming to you','On trip') ORDER BY r.id DESC",(service,)).fetchall();return jsonify(items=[dict(r) for r in rows])
+
+@app.post('/api/provider/requests/<int:rid>/claim')
+@provider_required
+def claim_request(rid):
+    row=db().execute('SELECT service,status FROM requests WHERE id=?',(rid,)).fetchone()
+    if not row:return jsonify(error='Request not found.'),404
+    expected='O-Ride' if session['provider_role']=='Rider' else ('O-Drive' if session['provider_role']=='Driver' else 'O-Movers')
+    if row['service']!=expected:return jsonify(error='This request belongs to another provider role.'),403
+    if row['status'] not in ('New','Available'):return jsonify(error='Request is no longer available.'),409
+    db().execute("UPDATE requests SET provider_id=?,status='Coming to you',updated_at=? WHERE id=?",(session['provider_id'],now_iso(),rid));db().commit();return jsonify(ok=True)
 
 @app.errorhandler(404)
-def not_found(_):
-    return render_template('error.html', code=404, message='That O page does not exist.'), 404
+def not_found(e):
+    if request.path.startswith('/api/'): return jsonify(error='Not found'),404
+    return render_template('error.html',code=404,message='That O route does not exist.'),404
 
-
-init_db()
+@app.errorhandler(500)
+def server_error(e):
+    if request.path.startswith('/api/'): return jsonify(error='O hit an internal error.'),500
+    return render_template('error.html',code=500,message='O hit an internal error.'),500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', '8000')))
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT','5000')), debug=os.getenv('FLASK_DEBUG')=='1')

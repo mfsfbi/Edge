@@ -1,1 +1,1 @@
-{% extends 'base.html' %}{% block content %}<main class="shell"><section class="page centered"><div class="eyebrow">O</div><h1>{{code}}</h1><p>{{message}}</p><a class="button" href="{{url_for('home')}}">Back to O</a></section></main>{% endblock %}
+{% extends 'base.html' %}{% block title %}O — {{ code }}{% endblock %}{% block body %}<main class="error-page"><div class="o-mark big">O</div><div class="eyebrow">{{ code }}</div><h1>{{ message }}</h1><a href="/" class="btn primary">Back to O</a></main>{% endblock %}
