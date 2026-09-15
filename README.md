@@ -1,23 +1,21 @@
-# O Mobility
+# O-System V1 Dispatch
 
-O is a mobile-first PWA for:
-- O-Ride — bike passenger service
-- O-Drive — car service
-- O-Movers — moving service
-- O-Travels — links to https://otravel-bleg.onrender.com/
+Clean O transport system with:
+- guest-first customer flow
+- optional customer accounts
+- O-Ride, O-Drive, O-Movers partner dashboards
+- nearest available partner matching with atomic reservation
+- orange available / green assigned / blue on trip states
+- customer live map with available partners before booking and assigned partner road route after matching
+- partner map showing service partner population and active customer route
+- admin map showing partners, active orders, and recent geolocated visitors when permission is available
+- admin simulation of dispatch, pickup, on-trip movement and completion
+- device model/client hints captured where supported
+- deployment-independent O QR
+- root /sw.js service worker route
 
-## Render
-Only two environment variables are required:
+Render environment variables:
+USER_NAME
+PASSWORD
 
-- `USER_NAME`
-- `PASSWORD`
-
-Admin entry: `/promise212324`
-Provider entries:
-- `/O-Rider` — O-Ride partners
-- `/O-Drive` — O-Drive partners
-- `/O-Movers` — O-Movers partners
-
-Customers use `/` then `/services` and the public service pages. Provider accounts are created by Admin; there is no public provider self-registration.
-
-`render.yaml` includes a persistent disk at `/var/data` for production data retention. On Render, use a compatible persistent-disk service plan when you need data to survive redeploys.
+Use the included render.yaml for deployment.
