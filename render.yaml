@@ -1,18 +1,17 @@
 services:
   - type: web
-    name: o-system-v1
-    env: python
+    name: o-mobility
+    runtime: python
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --workers 2 --threads 4 --timeout 120 app:app
     healthCheckPath: /health
+    disk:
+      name: o-mobility-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: USER_NAME
         sync: false
       - key: PASSWORD
         sync: false
-      - key: SECRET_KEY
-        sync: false
-    disk:
-      name: o-data
-      mountPath: /var/data
-      sizeGB: 1
