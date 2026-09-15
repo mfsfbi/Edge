@@ -284,6 +284,24 @@ def before():
 def health():
     return jsonify(ok=True, version='O-System V1 Dispatch')
 
+@app.get('/manifest.json')
+def root_manifest():
+    return app.send_static_file('manifest.json')
+
+@app.get('/favicon.ico')
+def favicon():
+    return app.send_static_file('logo.svg')
+
+@app.get('/o/')
+@app.get('/o')
+def o_shortcut():
+    return redirect(url_for('services'))
+
+@app.post('/pulse_receiver')
+def pulse_receiver():
+    # Compatibility endpoint for older heartbeat clients. Keep it quiet and out of error logs.
+    return ('', 204)
+
 
 @app.get('/')
 def home():
@@ -453,11 +471,21 @@ def provider_entry():
 
 @app.post('/provider-login')
 def provider_login_post():
-    service=request.form.get('service'); identifier=request.form.get('username','').strip().lower(); pw=request.form.get('password','')
-    a=q("SELECT a.*, p.service partner_service FROM accounts a JOIN partners p ON p.account_id=a.id WHERE lower(a.username)=? AND a.active=1 AND a.role='partner'",(identifier,),True)
-    if a and a['partner_service']==service and check_password_hash(a['password_hash'],pw):
-        session['account_id']=a['id']; return redirect(url_for('partner_home',service=service))
-    return render_template('provider_entry.html',sidebar=nav('partner_entry',service),service=service,service_name=SERVICES.get(service,service),action='/provider-login',error='Partner name/username or password is not correct.',page_theme='light')
+    service=(request.form.get('service') or '').strip().lower()
+    identifier=(request.form.get('username') or '').strip().lower()
+    compact=identifier.replace(' ','')
+    pw=request.form.get('password','')
+    a=q("""SELECT a.*, p.service partner_service
+           FROM accounts a JOIN partners p ON p.account_id=a.id
+           WHERE a.active=1 AND a.role='partner'
+             AND (lower(a.username)=? OR lower(a.name)=? OR replace(lower(COALESCE(a.phone,'')),' ','')=?)
+             AND p.service=?
+           ORDER BY a.id LIMIT 1""",(identifier,identifier,compact,service),True)
+    if a and check_password_hash(a['password_hash'],pw):
+        session.clear()
+        session['account_id']=a['id']
+        return redirect(url_for('partner_home',service=service))
+    return render_template('provider_entry.html',sidebar=nav('partner_entry',service),service=service,service_name=SERVICES.get(service,service),action='/provider-login',error='The name, username or password is not correct.',page_theme='light')
 
 
 @app.get('/partner/<service>')
@@ -469,7 +497,7 @@ def partner_home(service):
     reqs=q("SELECT r.*,COALESCE(a.name,r.guest_name,'Guest') customer_name FROM requests r LEFT JOIN accounts a ON a.id=r.customer_id WHERE r.service=? AND (r.partner_id=? OR (r.partner_id IS NULL AND r.status='requested')) ORDER BY CASE WHEN r.partner_id=? THEN 0 ELSE 1 END, r.id DESC LIMIT 40",(service,p['id'],p['id']))
     friends=q('SELECT p.*,a.name,a.phone FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? AND a.active=1 AND p.id!=? AND p.lat IS NOT NULL AND p.lon IS NOT NULL',(service,p['id']))
     template = {'ride':'partner_ride.html','drive':'partner_drive.html','mover':'partner_mover.html'}[service]
-    return render_template(template,sidebar=nav('partner',service),partner=p,requests=reqs,friends=friends,service=service,service_name=SERVICES[service],page_theme='light')
+    return render_template(template,sidebar=nav('partner',service),partner=dict(p),requests=[dict(x) for x in reqs],friends=[dict(x) for x in friends],service=service,service_name=SERVICES[service],page_theme='light')
 
 
 @app.post('/api/partner/status')
@@ -750,7 +778,7 @@ def admin_service(service):
     if service not in SERVICES: abort(404)
     reqs=q("SELECT r.*,COALESCE(c.name,r.guest_name,'Guest') customer_name,p.id partner_id,pa.name partner_name,p.status partner_status,p.lat partner_lat,p.lon partner_lon,p.speed_kmh FROM requests r LEFT JOIN accounts c ON c.id=r.customer_id LEFT JOIN partners p ON p.id=r.partner_id LEFT JOIN accounts pa ON pa.id=p.account_id WHERE r.service=? ORDER BY r.id DESC LIMIT 80",(service,))
     partners=q("SELECT p.*,a.name,a.username,a.phone,a.active a_active FROM partners p JOIN accounts a ON a.id=p.account_id WHERE p.service=? ORDER BY a.name",(service,))
-    return render_template('admin_service.html',sidebar=nav('admin'),service=service,service_name=SERVICES[service],requests=reqs,partners=partners,page_theme='light')
+    return render_template('admin_service.html',sidebar=nav('admin'),service=service,service_name=SERVICES[service],requests=[dict(x) for x in reqs],partners=[dict(x) for x in partners],page_theme='light')
 
 @app.route(ADMIN_PATH+'/partners',methods=['GET','POST'])
 @admin_required
