@@ -1,21 +1,22 @@
-# O System V1 — Clean People Build
+# O System
 
-This build uses a fresh O account layer with three people types.
+O is a Flask + SQLite transport/service platform built on the existing Open Road application foundation. The original trip, ticketing, messaging, visitor analytics, content, QR, backup and administration features remain available under the existing routes; the primary public experience is now the O service layer.
 
-## People
-`/people` is the only O people entry point and presents exactly three choices:
-- Rider
-- Driver
-- Mover
+## Render
 
-An Admin creates the account once. The person then selects their role and signs in with the same name and password. Phone or ID can also be used as the identifier when supplied.
+Procfile:
+`web: gunicorn app:app`
 
-## Admin
-Admin control room: `/promise212324`
-People management: `/promise212324/people`
-Requests: `/promise212324/requests`
+Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in Render environment variables. Set `SECRET/COOKIE` values as appropriate for the deployment. `O_ROUTING_URL` defaults to the public OSRM routing service and can be changed to a compatible routing endpoint.
 
-Set `USER_NAME`, `PASSWORD`, and `SECRET_KEY` in Render.
+## O
 
-## Clean separation
-The old account-management URLs are not defined in this build. The application uses a new `o.db` database file, so it does not reuse legacy account tables or legacy account routes.
+Public entry: `/o/`
+
+People: `/o/people`
+
+O administration: `/o-control/` (requires the protected admin login)
+
+O supports customer accounts, Rider/Driver/Mover provider accounts, server-side provider-role authorization, provider QR entry, service requests, route distance/time, configurable fare estimation, provider location updates, live request polling, Leaflet/OpenStreetMap presentation, PWA shell and offline-aware static caching.
+
+Provider passwords are hashed. QR codes contain secure provider tokens, not passwords.

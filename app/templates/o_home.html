@@ -1,0 +1,16 @@
+{% extends 'o_base.html' %}
+{% block content %}
+<section class="o-splash" id="oSplash"><div class="o-glow-ring"></div><div class="o-letter">O</div><div class="o-wordmark">MOVE WITH O</div></section>
+<section class="o-home-shell" id="oMain">
+  <div class="o-home-head"><div><span class="o-kicker">O SERVICES</span><h1>Move.</h1></div><a class="o-icon-link" href="{{ url_for('o.people') }}" title="People">People</a></div>
+  <section class="o-service-grid">
+    <a href="{{ url_for('o.request_service') }}?service=O-Ride" class="o-service-card ride"><div class="o-service-badge">O</div><div><span>PERSONAL</span><h2>O-Ride</h2><p>Ride now</p></div><b>→</b></a>
+    <a href="{{ url_for('o.request_service') }}?service=O-Drive" class="o-service-card drive"><div class="o-service-badge">O</div><div><span>DRIVING</span><h2>O-Drive</h2><p>Move with a driver</p></div><b>→</b></a>
+    <a href="{{ url_for('o.request_service') }}?service=O-Movers" class="o-service-card movers"><div class="o-service-badge">O</div><div><span>MOVING</span><h2>O-Movers</h2><p>Move goods</p></div><b>→</b></a>
+  </section>
+  <div class="o-home-lower"><a class="o-quiet-card" href="{{ url_for('o.people') }}"><span class="o-small-orb">O</span><div><strong>People</strong><span>Rider · Driver · Mover</span></div><b>→</b></a><a class="o-quiet-card" href="{{ url_for('o.my_o') if session.get('user_id') else url_for('public.register') }}"><span class="o-small-orb">O</span><div><strong>{{ 'My O' if session.get('user_id') else 'Create account' }}</strong><span>{{ 'Requests and activity' if session.get('user_id') else 'Your O identity' }}</span></div><b>→</b></a></div>
+</section>
+{% endblock %}
+{% block scripts %}<script>
+window.addEventListener('load',()=>{setTimeout(()=>document.getElementById('oSplash')?.classList.add('done'),1500);});
+</script>{% endblock %}
