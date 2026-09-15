@@ -1,6 +1,0 @@
-{% extends 'o_base.html' %}
-{% block content %}
-<section class="o-page-head"><span class="o-kicker">PEOPLE</span><h1>Choose your role.</h1></section>
-<section class="o-role-grid">{% for role in roles %}<a class="o-role-card" href="{{ url_for('o.provider_login', role=role.lower()) }}"><span class="o-small-orb">O</span><div><strong>{{ role }}</strong><span>O service access</span></div><b>→</b></a>{% endfor %}</section>
-<div class="o-account-strip"><div><span class="o-kicker">CUSTOMER</span><strong>O account</strong><span>For people using O.</span></div><a class="o-secondary-button" href="{{ url_for('public.login') }}">Sign in</a><a class="o-secondary-button" href="{{ url_for('public.register') }}">Create</a></div>
-{% endblock %}

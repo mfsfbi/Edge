@@ -1,7 +1,0 @@
-{% extends 'o_base.html' %}
-{% block content %}
-<section class="o-page-head"><span class="o-kicker">SERVICES</span><h1>Choose O.</h1></section>
-<section class="o-service-grid full">
-{% for s in services %}<a href="{{ url_for('o.request_service') }}?service={{ s }}" class="o-service-card {{ 'ride' if s=='O-Ride' else 'drive' if s=='O-Drive' else 'movers' }}"><div class="o-service-badge">O</div><div><span>{{ 'PERSONAL' if s=='O-Ride' else 'DRIVING' if s=='O-Drive' else 'MOVING' }}</span><h2>{{ s }}</h2><p>{{ 'Ride now' if s=='O-Ride' else 'Driving service' if s=='O-Drive' else 'Moving & delivery' }}</p></div><b>→</b></a>{% endfor %}
-</section>
-{% endblock %}

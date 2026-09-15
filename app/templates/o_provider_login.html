@@ -1,2 +1,0 @@
-{% extends 'o_base.html' %}
-{% block content %}<section class="o-auth"><div class="o-auth-mark">O</div><span class="o-kicker">PEOPLE · {{ role }}</span><h1>{{ role }} access</h1><form method="post"><label>Login name<input name="identity" autocomplete="username" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="o-primary-button">Enter {{ role }}</button></form><a class="o-secondary-button" href="{{ url_for('o.people') }}">Back</a></section>{% endblock %}
