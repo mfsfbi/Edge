@@ -12,7 +12,6 @@ ADMIN_USER = os.getenv('USER_NAME', 'admin')
 ADMIN_PASSWORD = os.getenv('PASSWORD', 'change-me')
 OSRM_URL = os.getenv('OSRM_URL', 'https://router.project-osrm.org')
 APP_NAME = 'O'
-APP_TAGLINE = 'Kenya ride, driving and moving services'
 TRAVEL_URL = 'https://otravel-bleg.onrender.com'
 
 app = Flask(__name__)
@@ -119,14 +118,6 @@ def init_db():
 init_db()
 
 
-@app.after_request
-def seo_headers(response):
-    # Keep public informational pages crawlable while preserving normal app/session behavior.
-    if request.path in ('/', '/app', '/people', '/login', '/register'):
-        response.headers.setdefault('X-Robots-Tag', 'index, follow')
-    return response
-
-
 def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
@@ -164,58 +155,72 @@ def health():
 
 @app.route('/')
 def index():
-    return render_template('index.html', travel_url=TRAVEL_URL, app_name=APP_NAME, app_tagline=APP_TAGLINE, canonical_url=request.url_root.rstrip('/'))
+    return render_template('index.html', travel_url=TRAVEL_URL, app_name=APP_NAME, canonical=request.url_root.rstrip('/'))
 
 @app.route('/app')
 def app_shell():
-    return render_template('app.html', travel_url=TRAVEL_URL, app_name=APP_NAME, app_tagline=APP_TAGLINE, canonical_url=request.url)
+    return render_template('app.html', travel_url=TRAVEL_URL, app_name=APP_NAME, canonical=request.url_root.rstrip('/') + '/app', noindex=True)
 
 @app.route('/login')
 def login_page():
-    return render_template('auth.html', mode='login')
+    return render_template('auth.html', mode='login', app_name=APP_NAME, noindex=True)
 
 @app.route('/register')
 def register_page():
-    return render_template('auth.html', mode='register')
+    return render_template('auth.html', mode='register', app_name=APP_NAME, noindex=True)
 
 @app.route('/people')
 def people_page():
-    return render_template('people.html')
+    return render_template('people.html', app_name=APP_NAME, noindex=True)
 
 @app.route('/admin')
 def admin_page():
-    return render_template('admin.html')
+    return render_template('admin.html', app_name=APP_NAME, noindex=True)
 
 @app.route('/provider/<role_slug>')
 def provider_page(role_slug):
     role = {'rider':'Rider','driver':'Driver','mover':'Mover'}.get(role_slug.lower())
     if not role:
         return render_template('error.html', code=404, message='That O role does not exist.'), 404
-    return render_template('provider.html', role=role)
-
-@app.get('/robots.txt')
-def robots_txt():
-    base = request.url_root.rstrip('/')
-    body = f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /provider/\nSitemap: {base}/sitemap.xml\n"
-    return app.response_class(body, mimetype='text/plain')
-
-@app.get('/sitemap.xml')
-def sitemap_xml():
-    base = request.url_root.rstrip('/')
-    urls = [base + path for path in ('/', '/app', '/people', '/login', '/register')]
-    body = '<?xml version="1.0" encoding="UTF-8"?>' + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(f'<url><loc>{u}</loc></url>' for u in urls) + '</urlset>'
-    return app.response_class(body, mimetype='application/xml')
+    return render_template('provider.html', role=role, app_name=APP_NAME, noindex=True)
 
 @app.route('/sw.js')
 def service_worker():
     response = app.send_static_file('sw.js')
-    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Service-Worker-Allowed'] = '/'
     response.mimetype = 'application/javascript'
     return response
 
 @app.get('/manifest.json')
 def manifest_json():
     return app.send_static_file('manifest.json')
+
+@app.get('/robots.txt')
+def robots_txt():
+    base = request.url_root.rstrip('/')
+    body = "User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\nDisallow: /register\nDisallow: /people\nDisallow: /provider/\nDisallow: /api/\nSitemap: " + base + "/sitemap.xml\n"
+    return app.response_class(body, mimetype='text/plain')
+
+@app.get('/sitemap.xml')
+def sitemap_xml():
+    base = request.url_root.rstrip('/')
+    urls = ['/', '/o-ride', '/o-drive', '/o-movers']
+    items = ''.join('<url><loc>' + base + u + '</loc></url>' for u in urls)
+    xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + items + '</urlset>'
+    return app.response_class(xml, mimetype='application/xml')
+
+@app.get('/o-ride')
+def o_ride_page():
+    return render_template('service_page.html', service='O-Ride', heading='O-Ride in Kenya', description='O-Ride is O ride booking for convenient city and local transport, with map-based pickup and destination selection.', canonical=request.url_root.rstrip('/') + '/o-ride')
+
+@app.get('/o-drive')
+def o_drive_page():
+    return render_template('service_page.html', service='O-Drive', heading='O-Drive in Kenya', description='O-Drive connects customers with O driving and transport services using a real map and location-aware service flow.', canonical=request.url_root.rstrip('/') + '/o-drive')
+
+@app.get('/o-movers')
+def o_movers_page():
+    return render_template('service_page.html', service='O-Movers', heading='O-Movers in Kenya', description='O-Movers helps customers request moving and delivery services with location-aware pickup, destination and route information.', canonical=request.url_root.rstrip('/') + '/o-movers')
 
 @app.post('/api/auth/register')
 def register():

@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}{{ heading }} | O{% endblock %}
+{% block description %}{{ description }}{% endblock %}
+{% block ogtitle %}{{ heading }} | O{% endblock %}
+{% block structured_data %}<script type="application/ld+json">{{ {"@context":"https://schema.org","@type":"Service","name":heading,"provider":{"@type":"Organization","name":"O"},"areaServed":{"@type":"Country","name":"Kenya"},"url":canonical}|tojson }}</script>{% endblock %}
+{% block body %}
+<header class="topbar shell"><a class="brand" href="/" aria-label="O home"><span class="brand-o"><svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="19"></circle></svg></span><span class="brand-name">O</span></a><nav class="topnav"><a href="/app">Open O</a><a href="/o-ride">O-Ride</a><a href="/o-drive">O-Drive</a><a href="/o-movers">O-Movers</a></nav></header>
+<main class="hero shell"><section class="hero-copy"><div class="eyebrow">O · KENYA</div><h1>{{ heading }}</h1><p class="lede">{{ description }}</p><div class="hero-actions"><a class="btn primary" href="/app">Use O</a><a class="btn soft" href="/register">Create account</a></div></section><section class="hero-panel"><div class="map-preview" id="landingMap"></div></section></main>
+<section class="feature-strip shell"><div><strong>Real location</strong><span>Enable device location and start from where you are.</span></div><div><strong>Real routes</strong><span>Choose pickup and destination on an interactive map.</span></div><div><strong>More after sign-in</strong><span>Save activity, ratings and your O account.</span></div></section>
+{% endblock %}
+{% block script %}<script>O.initLanding();</script>{% endblock %}

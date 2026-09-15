@@ -3,31 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#c9152b">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="{% block description %}O is a Kenya-focused ride, driving and moving platform with live maps, location-aware requests and a simple mobile experience.{% endblock %}">
+<meta name="robots" content="{% if noindex %}noindex,nofollow{% else %}index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1{% endif %}">
+<meta name="author" content="O">
 <meta name="application-name" content="O">
-<meta name="apple-mobile-web-app-title" content="O">
-<meta name="description" content="{{ meta_description|default('O is a Kenya-focused ride, driving and moving services platform with live maps, location-aware requests and an installable app.') }}">
-<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
-<link rel="canonical" href="{{ canonical_url|default(request.url) }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{% block ogtitle %}O — Rides, Driving & Moving in Kenya{% endblock %}">
+<meta property="og:description" content="O connects rides, driving and moving services with live maps and location-aware requests in Kenya.">
+<meta property="og:url" content="{{ canonical|default(request.url) }}">
+<meta property="og:site_name" content="O">
+<meta property="og:locale" content="en_KE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="O — Rides, Driving & Moving in Kenya">
+<meta name="twitter:description" content="Rides, driving and moving through O.">
+<link rel="canonical" href="{{ canonical|default(request.url) }}">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-<link rel="icon" href="{{ url_for('static', filename='icons/favicon-48.png') }}" sizes="48x48" type="image/png">
 <link rel="icon" href="{{ url_for('static', filename='icons/o.svg') }}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/o-192.png') }}">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="O">
-<meta property="og:title" content="{{ meta_title|default('O — Kenya ride, driving and moving services') }}">
-<meta property="og:description" content="{{ meta_description|default('Ride, drive and move with O — a Kenya-focused transport and service platform.') }}">
-<meta property="og:url" content="{{ canonical_url|default(request.url) }}">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="{{ meta_title|default('O — Kenya ride, driving and moving services') }}">
-<meta name="twitter:description" content="{{ meta_description|default('Ride, drive and move with O — a Kenya-focused transport and service platform.') }}">
-{% block structured_data %}{% endblock %}
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="preconnect" href="https://{s}.tile.openstreetmap.org" crossorigin>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/o.css') }}">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<title>{% block title %}O — Kenya ride, driving and moving services{% endblock %}</title>
+<title>{% block title %}O — Rides, Driving & Moving in Kenya{% endblock %}</title>
+{% block structured_data %}{% endblock %}
 </head>
-<body>{% block body %}{% endblock %}
+<body>
+{% block body %}{% endblock %}
 <script src="{{ url_for('static', filename='js/o.js') }}"></script>
 {% block script %}{% endblock %}
 </body>
