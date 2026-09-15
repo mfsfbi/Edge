@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="section-title"><div><div class="kicker">Feedback</div><h1>Ratings & feedback</h1><div class="small">Rate O and rate partners you have actually travelled with.</div></div></div>
+<div class="split">
+<div class="card"><h2>Rate the O app</h2><p class="muted">Tell us how the overall O experience feels.</p><form id="appRatingForm" class="form" onsubmit="return submitAppRating(event)"><div class="star-row" data-stars="app" aria-label="App rating"></div><textarea class="textarea" id="appNote" placeholder="Optional note"></textarea><button class="btn primary">Submit app rating</button></form></div>
+<div class="card"><h2>Rate a completed trip</h2>{% for t in completed %}<form class="form rate-trip" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)" onsubmit="return rateTrip(event,{{t.id}})"><div><b>{{t.partner_name or 'Partner'}}</b><div class="muted">{{t.service}} · {{t.destination_name}}</div></div><div class="star-row" data-stars="partner-{{t.id}}"></div><textarea class="textarea" name="note" placeholder="Optional note"></textarea><button class="btn primary">Submit trip rating</button></form>{% else %}<p class="muted">Completed trips you have not rated will appear here.</p>{% endfor %}</div>
+</div>
+<div class="card" style="margin-top:16px"><h2>Your submitted ratings</h2><div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Trip</th><th>App</th><th>Partner</th><th>Note</th></tr></thead><tbody>{% for r in ratings %}<tr><td>{{r.created_at}}</td><td>{{r.destination_name or 'App only'}}</td><td>{{r.app_rating or '—'}} / 5</td><td>{{r.partner_rating or '—'}} / 5</td><td>{{r.note or '—'}}</td></tr>{% else %}<tr><td colspan="5" class="muted">No ratings submitted yet.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+function starControl(el,initial=0){el.dataset.value=initial;el.innerHTML='';for(let i=1;i<=5;i++){const b=document.createElement('button');b.type='button';b.className='star';b.textContent='☆';b.setAttribute('aria-label',i+' stars');b.onclick=()=>{el.dataset.value=i;el.querySelectorAll('.star').forEach((x,n)=>x.textContent=n<i?'★':'☆')};el.appendChild(b)}}
+document.querySelectorAll('.star-row').forEach(x=>starControl(x));
+async function submitAppRating(e){e.preventDefault();const row=document.querySelector('[data-stars="app"]');const rating=+(row?.dataset.value||0);if(!rating){alert('Choose a star rating first.');return false}const r=await fetch('/api/app-rating',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating,note:document.getElementById('appNote').value})});if(r.ok)location.reload();else alert('Could not save your rating.');return false}
+async function rateTrip(e,id){e.preventDefault();const form=e.currentTarget;const row=form.querySelector('.star-row');const rating=+(row?.dataset.value||0);if(!rating){alert('Choose a star rating first.');return false}const note=form.querySelector('textarea').value;const r=await fetch('/api/rate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id,partner_rating:rating,note})});if(r.ok)location.reload();else alert('Could not save your rating.');return false}
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endblock %}
+{% block content %}
+<div class="admin-hero">
+  <section class="admin-welcome"><div class="kicker" style="color:rgba(255,255,255,.64)">O CONTROL CENTRE</div><h1>Everything moving.<br>One view.</h1><div class="muted">Live requests, partners, customers and platform health without the clutter.</div><div class="quick-row"><a class="btn" href="/promise212324/requests">Open requests</a><a class="btn" href="/promise212324/partners">Manage partners</a><a class="btn" href="/promise212324/fare-controls">Fare controls</a></div></section>
+  <section class="admin-alert"><div class="kicker">Needs attention</div><h3>{{stats.open_requests}} active requests</h3><div class="muted">{{stats.complaints}} open complaints · {{stats.errors}} unresolved system issues</div><div class="control-grid" style="grid-template-columns:1fr 1fr;margin-top:16px"><a class="control-card" href="/promise212324/inbox"><b>Inbox</b><span>{{stats.open_feedback}} open</span></a><a class="control-card" href="/promise212324/system"><b>System</b><span>{{stats.errors}} unresolved</span></a></div></section>
+</div>
+<div class="statgrid" style="margin-top:14px">
+  <a class="stat stat-link" href="/promise212324/service/ride"><span>O-Ride</span><b>{{stats.ride_partners}}</b><small>{{stats.ride_open}} active requests</small></a>
+  <a class="stat stat-link" href="/promise212324/service/drive"><span>O-Drive</span><b>{{stats.drive_partners}}</b><small>{{stats.drive_open}} active requests</small></a>
+  <a class="stat stat-link" href="/promise212324/service/mover"><span>O-Movers</span><b>{{stats.mover_partners}}</b><small>{{stats.mover_open}} active requests</small></a>
+  <a class="stat" href="/promise212324/customers"><span>Customers</span><b>{{stats.customers}}</b><small>registered accounts</small></a>
+</div>
+<div class="control-grid">
+  <a class="control-card" href="/promise212324/requests"><b>Dispatch board</b><span>Track every booking and assignment.</span></a>
+  <a class="control-card" href="/promise212324/partners"><b>Partner access</b><span>Create, activate and deactivate service providers.</span></a>
+  <a class="control-card" href="/promise212324/customers"><b>Customers</b><span>Account and trip history.</span></a>
+  <a class="control-card" href="/promise212324/complaints"><b>Customer care</b><span>Complaints and resolutions.</span></a>
+  <a class="control-card" href="/promise212324/ratings"><b>Ratings</b><span>Service and partner quality.</span></a>
+  <a class="control-card" href="/promise212324/backup"><b>Backup & export</b><span>Keep a recoverable copy of the system.</span></a>
+</div>
+<div class="admin-two" style="margin-top:14px">
+  <section class="card"><div class="section-title"><div><div class="kicker">LIVE NETWORK</div><h2>Where O is active</h2></div><span class="badge status-green"><span class="dot"></span>Live</span></div><div id="adminMap" class="mapbox" style="height:510px"></div></section>
+  <aside class="grid"><div class="card"><div class="kicker">Platform health</div><div class="metric-strip"><div class="metric-tile"><span>Completed</span><b>{{stats.completed_requests}}</b></div><div class="metric-tile"><span>Gross fares</span><b>KES {{'%.0f'|format(stats.gross_fares or 0)}}</b></div><div class="metric-tile"><span>Ratings</span><b>{{stats.ratings}}</b></div></div></div>
+  <div class="card"><div class="kicker">Quick actions</div><div class="action-stack"><a class="action-mini" href="/promise212324/simulate"><div><b>Simulation</b><span>Demo dispatch safely</span></div><span class="badge {{'status-green' if stats.simulate else 'status-orange'}}">{{'ON' if stats.simulate else 'OFF'}}</span></a><a class="action-mini" href="/promise212324/people"><div><b>People</b><span>Useful access and identity view</span></div><span>→</span></a><a class="action-mini" href="/promise212324/system"><div><b>System</b><span>Review only unresolved issues</span></div><span>→</span></a></div></div>
+  <div class="card"><div class="kicker">Security</div><h2 style="margin:4px 0 7px">Admin controls stay separate</h2><div class="small">Customers and partners never see this workspace. Operational details stay here where they belong.</div></div></aside>
+</div>
+{% endblock %}
+{% block scripts %}<script>const am=L.map('adminMap').setView([-1.2864,36.8172],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(am);let layers=[];function c(s){return s==='green'?'#12a66a':s==='blue'?'#2d74db':'#e18a00'}async function refresh(){try{const r=await fetch('/api/admin/live-map');if(!r.ok)return;const x=await r.json();layers.forEach(m=>m.remove());layers=[];x.partners.forEach(p=>{if(p.lat==null||p.lon==null)return;const cc=c(p.status);layers.push(L.circleMarker([p.lat,p.lon],{radius:9,color:cc,fillColor:cc,fillOpacity:.92,weight:3}).addTo(am).bindPopup('<b>'+p.name+'</b><br>'+p.service+' · '+p.status))});x.requests.forEach(q=>{if(q.pickup_lat==null||q.pickup_lon==null)return;const cc=q.status==='on_trip'?'#2d74db':'#12a66a';layers.push(L.circleMarker([q.pickup_lat,q.pickup_lon],{radius:7,color:cc,fillColor:cc,fillOpacity:.7,weight:3}).addTo(am).bindPopup('<b>'+q.customer_name+'</b><br>'+q.service+' · '+q.status))});const pts=layers.map(m=>m.getLatLng());if(pts.length)am.fitBounds(pts,{padding:[25,25]})}catch(e){}}refresh();setInterval(refresh,7000);setTimeout(()=>am.invalidateSize(true),250);</script>{% endblock %}

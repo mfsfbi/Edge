@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="entry-stage" id="entryStage"><div><div class="entry-o"><svg viewBox="0 0 180 180"><circle class="track" cx="90" cy="90" r="78"/><circle class="draw" cx="90" cy="90" r="78"/></svg></div><div class="kicker" style="margin-top:6px">O services</div><h1 class="entry-copy" style="font-size:clamp(36px,7vw,70px);margin:8px 0 3px">Move with O.</h1><p class="entry-sub" style="font-size:16px;max-width:520px;margin:0 auto">Ride, drive or move what matters. One simple place to start.</p><div class="entry-goto" style="margin-top:20px"><a class="btn primary" href="/services">Start a request</a><a class="btn" href="/qr" style="margin-left:6px">O QR</a></div></div></div>
+<script>(function(){const key='o_entry_seen_v3',stage=document.getElementById('entryStage');if(localStorage.getItem(key)==='1'){location.replace('/services');return}setTimeout(()=>{localStorage.setItem(key,'1');location.replace('/services')},2600)})();</script>
+{% endblock %}
