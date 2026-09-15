@@ -5,8 +5,39 @@ from pathlib import Path
 import sqlite3, os, re
 
 BASE = Path(__file__).resolve().parent
-DATA = Path(os.environ.get('DATA_DIR', '/var/data' if os.environ.get('RENDER') else str(BASE / 'data')))
-DATA.mkdir(parents=True, exist_ok=True)
+
+def choose_data_dir() -> Path:
+    # Prefer an explicitly configured persistent directory.
+    configured = os.environ.get('DATA_DIR', '').strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            test = candidate / '.write_test'
+            test.write_text('ok', encoding='utf-8')
+            test.unlink(missing_ok=True)
+            return candidate
+        except (PermissionError, OSError):
+            pass
+
+    # Render disks are normally mounted at /var/data, but a service deployed
+    # without a disk cannot write there. Fall back instead of crashing startup.
+    if os.environ.get('RENDER'):
+        candidate = Path('/var/data')
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            test = candidate / '.write_test'
+            test.write_text('ok', encoding='utf-8')
+            test.unlink(missing_ok=True)
+            return candidate
+        except (PermissionError, OSError):
+            pass
+
+    candidate = BASE / 'data'
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
+
+DATA = choose_data_dir()
 DB_PATH = DATA / 'o.db'
 
 app = Flask(__name__)
