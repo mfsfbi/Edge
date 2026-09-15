@@ -1,9 +1,21 @@
-# O-System V1 - Full Role Build
+# O System V1 — Clean People Build
 
-Complete role-based O platform: customers, O-Ride, O-Drive, O-Movers, and Admin.
+This build uses a fresh O account layer with three people types.
 
-Customer basics work without sign-in; accounts add trips, ratings, feedback history, account and appearance.
-Partners are created by Admin and sign in through their service entry.
-Admin: /promise212324 using Render USER_NAME and PASSWORD.
+## People
+`/people` is the only O people entry point and presents exactly three choices:
+- Rider
+- Driver
+- Mover
 
-Maps use OpenStreetMap/Leaflet and OSRM road routing when the public routing service is available.
+An Admin creates the account once. The person then selects their role and signs in with the same name and password. Phone or ID can also be used as the identifier when supplied.
+
+## Admin
+Admin control room: `/promise212324`
+People management: `/promise212324/people`
+Requests: `/promise212324/requests`
+
+Set `USER_NAME`, `PASSWORD`, and `SECRET_KEY` in Render.
+
+## Clean separation
+The old account-management URLs are not defined in this build. The application uses a new `o.db` database file, so it does not reuse legacy account tables or legacy account routes.

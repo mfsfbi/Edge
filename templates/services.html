@@ -1,16 +1,1 @@
-{% extends 'base.html' %}
-{% block title %}Services — {{ site.company_name }}{% endblock %}
-{% block content %}
-<main><section class="page-hero pharma-page-hero"><div class="container"><span class="eyebrow">Pharmaceutical operations</span><h1 style="font-size:clamp(38px,5vw,62px);letter-spacing:-.045em;margin:14px 0">A deeper view of the <span style="color:var(--spu-maroon)">work.</span></h1><p class="muted" style="max-width:760px;font-size:18px">The service structure is designed around formulation, laboratory, production, quality and supply-chain stages. Actual recipes, specifications and release decisions remain controlled by the company’s authorized technical documentation.</p></div></section>
-<section class="section" style="padding-top:30px"><div class="container pharma-service-list">
-<article class="service"><div class="icon">◌</div><h3>Formulation & process support</h3><p class="muted">Approved formulation references, batch planning, mixing records and process documentation.</p></article>
-<article class="service"><div class="icon">⌁</div><h3>Laboratory & analysis</h3><p class="muted">Sample registration, test records, result capture and evidence-linked review.</p></article>
-<article class="service"><div class="icon">▣</div><h3>Production operations</h3><p class="muted">Manufacturing planning, batch progress, equipment records, packaging and release state.</p></article>
-<article class="service"><div class="icon">✓</div><h3>Quality assurance & control</h3><p class="muted">Checks, approvals, holds, deviations, document control and traceability.</p></article>
-<article class="service"><div class="icon">▤</div><h3>Materials & inventory</h3><p class="muted">Raw materials, active ingredients, packaging materials and finished-goods movement.</p></article>
-<article class="service"><div class="icon">+</div><h3>Research & development</h3><p class="muted">Trial records, observations, formulation development and controlled transfer toward production.</p></article>
-<article class="service"><div class="icon">→</div><h3>Packaging & presentation</h3><p class="muted">Pack configuration, material linkage, batch identity and finished-product preparation.</p></article>
-<article class="service"><div class="icon">↗</div><h3>Supply & distribution</h3><p class="muted">Order preparation, dispatch records, destination tracking and operational visibility.</p></article>
-<article class="service"><div class="icon">⌘</div><h3>Technical documentation</h3><p class="muted">Specifications, SOP references, certificates and supporting operational records.</p></article>
-</div></section></main>
-{% endblock %}
+{% extends 'base.html' %}{% block content %}<main class="shell"><section class="page"><div class="eyebrow">O SERVICES</div><h1>Choose the way you need to move.</h1><div class="service-grid"><article><b>O-Ride</b><p>For getting from where you are to where you want to be.</p></article><article><b>O-Drive</b><p>For driver-based journeys and assigned driving work.</p></article><article><b>O-Movers</b><p>For moving items, deliveries and practical transport jobs.</p></article></div><a class="button" href="{{url_for('people')}}">O People</a></section></main>{% endblock %}
