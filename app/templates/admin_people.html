@@ -1,4 +1,0 @@
-{% extends 'base.html' %}{% block content %}
-<div class="section-title"><div><div class="kicker">Admin</div><h1>People & devices</h1><div class="route-note">Device names are captured from browser/device information when available; exact handset models are not exposed by every browser.</div></div></div>
-<div class="card"><div class="tablewrap"><table class="table"><thead><tr><th>Person</th><th>Phone</th><th>Role</th><th>Device</th><th>Browser</th><th>Page</th><th>Time</th></tr></thead><tbody>{% for p in people %}<tr><td>{{p.display_name}}</td><td>{{p.account_phone or 'Guest'}}</td><td>{{p.role}}</td><td>{{p.device_model or p.device or 'Unknown device'}}</td><td>{{p.browser or '—'}}</td><td>{{p.page}}</td><td>{{p.created_at}}</td></tr>{% else %}<tr><td colspan="7" class="muted">No activity yet.</td></tr>{% endfor %}</tbody></table></div></div>
-{% endblock %}

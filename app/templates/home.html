@@ -1,7 +1,0 @@
-{% extends 'base.html' %}
-{% block content %}
-<div class="entry-stage" id="entryStage"><div><div class="entry-o"><svg viewBox="0 0 180 180"><circle class="track" cx="90" cy="90" r="78"/><circle class="draw" cx="90" cy="90" r="78"/></svg></div><h1 class="entry-copy" style="font-size:clamp(34px,7vw,66px);margin:12px 0 4px">Move with O.</h1><p class="entry-sub">Warm, simple transport for the way you are going.</p><div class="entry-goto" style="margin-top:18px"><a class="btn primary" href="/services">Enter O Services</a></div></div></div>
-<script>
-(function(){const key='o_entry_seen_v1';const stage=document.getElementById('entryStage');if(sessionStorage.getItem(key)==='1'){location.replace('/services');return}setTimeout(()=>{sessionStorage.setItem(key,'1');location.replace('/services')},2600)})();
-</script>
-{% endblock %}
